@@ -43,14 +43,36 @@ try:
 except ImportError:  # pragma: no cover
     sys.exit("需要 tkinter（Windows 官方 Python 自带）")
 
+# Pillow 是可选的：有它就能显示像素风素材，没有就退回画圆。
+try:
+    from PIL import Image, ImageTk
+    _HAS_PIL = True
+except ImportError:  # pragma: no cover
+    _HAS_PIL = False
+
 DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://192.168.2.102:3099/state")
 POLL_MS = 700
 
 # 透明色键：窗口里所有这个颜色的像素会被系统抠掉，从而实现「只有灯、没有窗口」。
-BG_KEY = "#010203"
+BG_KEY = "#ff00ff"   # 洋红：灯罩是深灰，用近黑会误吃抗锯齿边缘
 
-SIZE = 64          # 灯的直径（像素）
-MARGIN = 14        # 留白，给光晕
+# 图片素材（有的话优先用，没有就退回画圆）
+ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "states")
+
+LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
+MARGIN = 8         # 四周留白
+
+# 状态 → 素材文件名
+STATE_IMAGE = {
+    "question":  "attention.png",
+    "retrying":  "working.png",
+    "tool":      "working.png",
+    "thinking":  "working.png",
+    "done":      "done.png",
+    "idle":      "idle.png",
+    "offline":   "offline.png",
+    "working":   "working.png",   # 兼容旧版桥
+}
 
 # 每个状态一个颜色。顺序按「越需要你注意，越靠前」。
 PALETTE = {
@@ -105,10 +127,13 @@ class Lamp:
             # 非 Windows 平台没有这个属性，退化成半透明整窗
             self.root.attributes("-alpha", 0.92)
 
-        side = SIZE + MARGIN * 2
-        self.root.geometry(f"{side}x{side}+{self._saved_pos(side)}")
+        self._photos: dict[str, object] = {}
+        self._assets = self._load_assets()
+        self.w, self.h = self._window_size()
 
-        self.canvas = tk.Canvas(self.root, width=side, height=side,
+        self.root.geometry(f"{self.w}x{self.h}+{self._saved_pos()}")
+
+        self.canvas = tk.Canvas(self.root, width=self.w, height=self.h,
                                 bg=BG_KEY, highlightthickness=0)
         self.canvas.pack()
 
@@ -130,7 +155,51 @@ class Lamp:
         base = os.environ.get("APPDATA") or os.path.expanduser("~")
         return os.path.join(base, "dsh-status-lamp.pos")
 
-    def _saved_pos(self, side: int) -> str:
+    # ---------- 素材 ----------
+
+    def _load_assets(self) -> dict:
+        """把状态图读进来，合成到色键背景上 —— 这样 tkinter 的透明色键才能生效。
+
+        没有 Pillow 或没有素材时返回空字典，调用方会退回画圆。
+        """
+        if not _HAS_PIL:
+            return {}
+        want = set(STATE_IMAGE.values())
+        out: dict = {}
+        for fn in want:
+            path = os.path.join(ASSET_DIR, fn)
+            if not os.path.isfile(path):
+                continue
+            try:
+                im = Image.open(path).convert("RGBA")
+            except OSError:
+                continue
+            # 等比缩放到目标高度
+            ratio = LAMP_H / im.size[1]
+            size = (max(1, int(im.size[0] * ratio)), LAMP_H)
+            im = im.resize(size, Image.LANCZOS)
+            # 合成到色键底色上（RGBA 直接给 PhotoImage 会丢掉 alpha）
+            bg = Image.new("RGB", size, BG_KEY)
+            bg.paste(im, (0, 0), im)
+            out[fn] = bg
+        return out
+
+    def _window_size(self) -> tuple:
+        """窗口尺寸 = 素材尺寸 + 留白。"""
+        if self._assets:
+            any_im = next(iter(self._assets.values()))
+            return (any_im.size[0] + MARGIN * 2, any_im.size[1] + MARGIN * 2)
+        # 退回圆点：正方形
+        side = 64 + 14 * 2
+        return (side, side)
+
+    # ---------- 位置记忆 ----------
+
+    def _pos_file(self) -> str:
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "dsh-status-lamp.pos")
+
+    def _saved_pos(self) -> str:
         try:
             with open(self._pos_file(), encoding="utf-8") as fh:
                 x, y = (int(v) for v in fh.read().split(","))
@@ -140,9 +209,8 @@ class Lamp:
                     return f"{x}+{y}"
         except (OSError, ValueError):
             pass
-        # 默认右下角
-        return f"{self.root.winfo_screenwidth() - side - 40}+" \
-               f"{self.root.winfo_screenheight() - side - 90}"
+        return (f"{self.root.winfo_screenwidth() - self.w - 40}+"
+                f"{self.root.winfo_screenheight() - self.h - 90}")
 
     def _save_pos(self) -> None:
         try:
@@ -156,19 +224,24 @@ class Lamp:
     def _draw(self) -> None:
         c = self.canvas
         c.delete("all")
-        pal = PALETTE[self.state]
-        r = SIZE / 2
-        cx = cy = MARGIN + r
 
-        # 光晕：两层虚点圆 + 一层实心描边，纯 tkinter 也能做出柔光感
+        # 有素材就用素材（像素风红绿灯）
+        fn = STATE_IMAGE.get(self.state)
+        im = self._assets.get(fn) if fn else None
+        if im is not None:
+            photo = ImageTk.PhotoImage(im)
+            self._photos[self.state] = photo      # 必须留引用，否则会被回收成空白
+            c.create_image(self.w // 2, self.h // 2, image=photo)
+            return
+
+        # 没素材：退回画一个圆点
+        pal = PALETTE.get(self.state, PALETTE["offline"])
+        r = 32
+        cx = cy = self.w / 2
         c.create_oval(cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8,
                       fill=pal["glow"], outline="", stipple="gray12")
-        c.create_oval(cx - r - 4, cy - r - 4, cx + r + 4, cy + r + 4,
-                      fill=pal["glow"], outline="", stipple="gray25")
-        # 主体
         c.create_oval(cx - r, cy - r, cx + r, cy + r,
                       fill=pal["core"], outline=pal["ring"], width=2)
-        # 高光（左上一点，增加立体感）
         c.create_oval(cx - r * 0.55, cy - r * 0.6,
                       cx - r * 0.15, cy - r * 0.2,
                       fill="#ffffff", outline="", stipple="gray50")
@@ -201,9 +274,8 @@ class Lamp:
         self.menu.tk_popup(ev.x_root, ev.y_root)
 
     def _reset_pos(self) -> None:
-        side = SIZE + MARGIN * 2
-        self.root.geometry(f"+{self.root.winfo_screenwidth() - side - 40}"
-                           f"+{self.root.winfo_screenheight() - side - 90}")
+        self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
+                           f"+{self.root.winfo_screenheight() - self.h - 90}")
         self._save_pos()
 
     def _toggle_topmost(self) -> None:
