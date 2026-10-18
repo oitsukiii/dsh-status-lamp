@@ -8,7 +8,7 @@
 | 🔴 红 | **重试中** | `llmRetry` 非空，或最后事件是 `llm/retry` |
 | 🔵 蓝 | **调工具中** | 最后事件是 `tool/call`（标题带工具名，如 `调工具 · bash`）|
 | 🟢 绿 | **思考中** | 最后事件是 `step/start`，且 turn 还开着 |
-| 🟦 青 | **刚完成** | 最后事件是 `turn/end`；默认永不超时，只被下一次 turn 打断 |
+| 🟦 青 | **刚完成** | 最后事件是 `turn/end`，保持 3 分钟；下一次 turn 会立刻打断它 |
 | ⚪ 灰白 | **空闲** | `openTurnStartSeq` 为 null |
 | ⚫ 暗灰 | **离线** | 状态文件超过 20 秒没更新，或桥连不上 |
 
@@ -175,15 +175,13 @@ turn/end  ⇒ done（青）
 **⇒ 实际效果就是「你回复了，绿灯就灭」。** 想调整保持时长：
 
 ```sh
-python3 bridge/state_bridge.py --done-seconds 120   # 2 分钟后回到空闲
-python3 bridge/state_bridge.py --done-seconds 0     # 永不超时（默认）
+python3 bridge/state_bridge.py --done-seconds 180   # 3 分钟（默认）
+python3 bridge/state_bridge.py --done-seconds 600   # 10 分钟
+python3 bridge/state_bridge.py --done-seconds 0     # 永不超时
 ```
 
-**⚠️ `--done-seconds 0` 的副作用**：绿灯永不过期，所以「空闲（全灭）」这个状态
-实际上不会再出现 —— 一轮结束后永远是绿灯，直到你发下一条消息把它打断成黄色。
-这是刻意的取舍：宁可一直提醒，也不要漏掉。
-
-如果想让空闲重新可见，给个有限值就行（比如 `--done-seconds 3600`）。
+**`--done-seconds 0` 的副作用**：绿灯永不过期，「空闲（全灭）」就不再出现。
+想要空闲可见就给个有限值 —— 这也是默认用 180 秒的原因。
 
 ## 提示音
 

@@ -45,9 +45,10 @@ SESSIONS_DIR = os.path.join(DSH_HOME, "sessions")
 # DSH 没有「用户已读」信号（没有 markRead / visibility 上报），所以只能用近似：
 #   · 用户发下一条消息（user/message）⇒ turn/start ⇒ 状态自然变成 thinking ✓
 #   · 用户看了但不回复 ⇒ 只能靠超时兜底
-# 默认 1 小时。传 --done-seconds 0 表示【永不超时】——
-# 绿灯只会在下一次 turn 开始时被黄色打断，这最贴近「未读就一直提醒」的语义。
-DONE_WINDOW_MS: Optional[int] = 3_600_000
+# 默认 3 分钟：够你看清结果，又不至于一直亮着。
+# 传 --done-seconds 0 表示永不超时（绿灯只被下一次 turn 打断）。
+# 不管设多少，下一次 turn 开始时绿灯总会立刻被黄色打断。
+DONE_WINDOW_MS: Optional[int] = 180_000
 
 # 状态文件这么久没更新，就认为 DSH 没在跑。
 STALE_SECONDS = 20.0
