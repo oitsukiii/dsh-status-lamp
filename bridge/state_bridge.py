@@ -45,8 +45,9 @@ SESSIONS_DIR = os.path.join(DSH_HOME, "sessions")
 # DSH 没有「用户已读」信号（没有 markRead / visibility 上报），所以只能用近似：
 #   · 用户发下一条消息（user/message）⇒ turn/start ⇒ 状态自然变成 thinking ✓
 #   · 用户看了但不回复 ⇒ 只能靠超时兜底
-# 默认 5 分钟：足够看清一条回复，又不至于一直亮着。
-DONE_WINDOW_MS = 300_000
+# 默认 1 小时。传 --done-seconds 0 表示【永不超时】——
+# 绿灯只会在下一次 turn 开始时被黄色打断，这最贴近「未读就一直提醒」的语义。
+DONE_WINDOW_MS: Optional[int] = 3_600_000
 
 # 状态文件这么久没更新，就认为 DSH 没在跑。
 STALE_SECONDS = 20.0
@@ -131,7 +132,7 @@ def read_state() -> dict[str, Any]:
         if log:
             events = read_tail_events(log, want=24)
             phase = current_phase(events)
-            if phase.get("phase") == "done" and events:
+            if phase.get("phase") == "done" and events and DONE_WINDOW_MS is not None:
                 last_ms = events[-1].get("time") or 0
                 if last_ms and (time.time() * 1000 - last_ms) > DONE_WINDOW_MS:
                     phase = {"phase": "idle"}
@@ -210,13 +211,16 @@ def main() -> None:
                     help="完成状态保持多少秒（默认 300）")
     args = ap.parse_args()
 
-    DONE_WINDOW_MS = int(args.done_seconds * 1000)
+    # 0（或负数）表示永不超时：绿灯只被下一次 turn 打断
+    DONE_WINDOW_MS = int(args.done_seconds * 1000) if args.done_seconds > 0 else None
 
     srv = ThreadingHTTPServer((args.host, args.port), _Handler)
     print(f"dsh-state-bridge listening on http://{args.host}:{args.port}/state")
     print(f"  DSH_HOME       = {DSH_HOME}")
     print(f"  projcache dir  = {PROJCACHE_DIR}")
-    print(f"  done window    = {DONE_WINDOW_MS / 1000:.0f}s")
+    print("  done window    = " + ("never expires (只被下一次 turn 打断)"
+                                   if DONE_WINDOW_MS is None
+                                   else f"{DONE_WINDOW_MS / 1000:.0f}s"))
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
