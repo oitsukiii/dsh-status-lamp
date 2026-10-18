@@ -8,7 +8,7 @@
 | 🔴 红 | **重试中** | `llmRetry` 非空，或最后事件是 `llm/retry` |
 | 🔵 蓝 | **调工具中** | 最后事件是 `tool/call`（标题带工具名，如 `调工具 · bash`）|
 | 🟢 绿 | **思考中** | 最后事件是 `step/start`，且 turn 还开着 |
-| 🟦 青 | **刚完成** | 最后事件是 `turn/end`，8 秒内 |
+| 🟦 青 | **刚完成** | 最后事件是 `turn/end`，保持 5 分钟（或直到你发下一条消息）|
 | ⚪ 灰白 | **空闲** | `openTurnStartSeq` 为 null |
 | ⚫ 暗灰 | **离线** | 状态文件超过 20 秒没更新，或桥连不上 |
 
@@ -150,6 +150,43 @@ client/lamp.py             圆灯（Windows 侧，纯标准库）
 client/run-lamp.bat        双击启动
 tools/verify-state.py      连通性与状态合理性检查
 deploy/                    可选：systemd 单元
+```
+
+## 关于「已读」
+
+**DSH 没有已读信号。** 翻过客户端和事件模型：
+
+```
+· 没有 markRead / seen / readAt
+· 没有 unread 计数 / 红点
+· 没有 visibilitychange / document.hidden —— 连窗口焦点都不上报
+· delivery-accepted 是「事件送达前端」，浏览器在后台也收得到，不代表人看了
+```
+
+所以只能做近似。当前的做法是：
+
+```
+turn/end  ⇒ done（青）
+  之后的走向取决于你：
+    · 你发下一条消息  ⇒ 新 turn 开始 ⇒ 立刻变黄（thinking）✓ 这就是"已读"
+    · 你看了但不回复  ⇒ 保持青色，直到 --done-seconds（默认 300 秒）超时
+```
+
+**⇒ 实际效果就是「你回复了，绿灯就灭」。** 想调整保持时长：
+
+```sh
+python3 bridge/state_bridge.py --done-seconds 120
+```
+
+## 提示音
+
+任务完成（进入 `done`）时播放 `assets/sounds/notify.wav`。
+
+```
+· 来源：ComfyUI-Notifications 插件的 notify.mp3，转成单声道 44.1k WAV
+  （Windows 的 winsound 只支持 WAV，这样就不用引入任何第三方库）
+· 只在状态【变成】done 时响一次，不会每次轮询都响
+· 从离线恢复不会误响
 ```
 
 ## 已知限制

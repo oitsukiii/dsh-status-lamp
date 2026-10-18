@@ -18,6 +18,8 @@
 
 交互
 ----
+    完成任务时播放 assets/sounds/notify.wav（Windows 用 winsound，零依赖）
+
     左键拖动   移动位置（松手后记住）
     右键       菜单：重新定位 / 置顶开关 / 退出
     双击       立刻刷新一次
@@ -42,6 +44,30 @@ try:
     import tkinter as tk
 except ImportError:  # pragma: no cover
     sys.exit("需要 tkinter（Windows 官方 Python 自带）")
+
+# 提示音：Windows 上用标准库 winsound 播 WAV，零依赖。
+SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                          "assets", "sounds", "notify.wav")
+_SOUND_OK = False
+if sys.platform == "win32":
+    try:
+        import winsound
+        _SOUND_OK = os.path.isfile(SOUND_FILE)
+    except ImportError:  # pragma: no cover
+        _SOUND_OK = False
+
+
+def play_done_sound() -> None:
+    """任务完成时响一下。异步播放，不阻塞 UI。"""
+    if not _SOUND_OK:
+        return
+    try:
+        winsound.PlaySound(SOUND_FILE,
+                           winsound.SND_FILENAME | winsound.SND_ASYNC
+                           | winsound.SND_NODEFAULT)
+    except (RuntimeError, OSError):
+        pass
+
 
 # Pillow 是可选的：有它就能显示像素风素材，没有就退回画圆。
 try:
@@ -306,9 +332,13 @@ class Lamp:
         self.detail = " · ".join(bits)
 
         if state != self._last_state:
+            prev = self._last_state
             self.state = state
             self._last_state = state
             self._draw()
+            # 只在【进入】完成态时响，且不是从离线恢复过来的噪声
+            if state == "done" and prev not in (None, "offline"):
+                play_done_sound()
 
         self.root.title(f"DSH — {self.detail}")
         self.root.after(POLL_MS, self.poll)

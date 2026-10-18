@@ -40,8 +40,13 @@ DSH_HOME = os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh"))
 PROJCACHE_DIR = os.path.join(DSH_HOME, "storages", "session_projcache", "sessions")
 SESSIONS_DIR = os.path.join(DSH_HOME, "sessions")
 
-# 「完成」状态只亮这么多秒，之后回到空闲。
-DONE_WINDOW_MS = 8000
+# 「完成」状态亮多久。
+
+# DSH 没有「用户已读」信号（没有 markRead / visibility 上报），所以只能用近似：
+#   · 用户发下一条消息（user/message）⇒ turn/start ⇒ 状态自然变成 thinking ✓
+#   · 用户看了但不回复 ⇒ 只能靠超时兜底
+# 默认 5 分钟：足够看清一条回复，又不至于一直亮着。
+DONE_WINDOW_MS = 300_000
 
 # 状态文件这么久没更新，就认为 DSH 没在跑。
 STALE_SECONDS = 20.0
@@ -162,6 +167,10 @@ def read_state() -> dict[str, Any]:
         "phase": phase.get("phase"),
         "tool": phase.get("tool"),
         "pending_questions": len(q_active),
+        "done_age_s": (
+            round((time.time() * 1000 - (events[-1].get("time") or 0)) / 1000, 1)
+            if phase.get("phase") in ("done",) and events else None
+        ),
         "updated_at": now,
     }
 
@@ -192,15 +201,22 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    global DONE_WINDOW_MS
+
     ap = argparse.ArgumentParser(description="DSH status bridge")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=3099)
+    ap.add_argument("--done-seconds", type=float, default=DONE_WINDOW_MS / 1000,
+                    help="完成状态保持多少秒（默认 300）")
     args = ap.parse_args()
+
+    DONE_WINDOW_MS = int(args.done_seconds * 1000)
 
     srv = ThreadingHTTPServer((args.host, args.port), _Handler)
     print(f"dsh-state-bridge listening on http://{args.host}:{args.port}/state")
     print(f"  DSH_HOME       = {DSH_HOME}")
     print(f"  projcache dir  = {PROJCACHE_DIR}")
+    print(f"  done window    = {DONE_WINDOW_MS / 1000:.0f}s")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
