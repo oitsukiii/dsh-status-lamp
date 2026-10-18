@@ -2,9 +2,15 @@
 
 一个浮在所有窗口之上的小圆灯，实时显示 **DSH 正在干什么**。
 
-```
-🟢 工作中   🟠 重试中   ⚪ 空闲   ⚫ 离线
-```
+| 颜色 | 状态 | 判据 |
+|---|---|---|
+| 🟡 黄 | **等你回答** | `userQuestions.questions.active` 非空 |
+| 🔴 红 | **重试中** | `llmRetry` 非空，或最后事件是 `llm/retry` |
+| 🔵 蓝 | **调工具中** | 最后事件是 `tool/call`（标题带工具名，如 `调工具 · bash`）|
+| 🟢 绿 | **思考中** | 最后事件是 `step/start`，且 turn 还开着 |
+| 🟦 青 | **刚完成** | 最后事件是 `turn/end`，8 秒内 |
+| ⚪ 灰白 | **空闲** | `openTurnStartSeq` 为 null |
+| ⚫ 暗灰 | **离线** | 状态文件超过 20 秒没更新，或桥连不上 |
 
 ## 为什么要单独做这个
 
@@ -81,7 +87,10 @@ python3 tools/verify-state.py --url http://<NAS的IP>:3099/state
 
 ## 状态怎么判定的
 
-数据来自 `$DSH_HOME/storages/session_projcache/sessions/session-*.json` 里的
+### 两个数据源
+
+**① `projcache`（快，判忙闲）** —— `$DSH_HOME/storages/session_projcache/sessions/session-*.json`：
+
 `record.rows.turnBoundary.val`：
 
 | 字段 | 含义 |
@@ -92,12 +101,30 @@ python3 tools/verify-state.py --url http://<NAS的IP>:3099/state
 | `subagent` | 非空 ⇒ 子代理在跑 |
 | `contextPressure` | 上下文占用量 / 窗口大小 |
 
-优先级：
+**② 事件流（细，判「此刻在干什么」）** —— `session.v4.jsonl.zstd`
+
+`sessionStats` 里的 `toolMs` / `llmMs` 是**事后汇总**的（只在 step 结束时更新），
+所以判断不了「此刻」。真正即时的是事件流：
 
 ```
-文件超过 20 秒没更新  ⇒ offline
-llmRetry 非空          ⇒ retrying
-openTurnStartSeq 非空  ⇒ working     ← 包含模型推理期间
+最后事件 = step/start     ⇒ LLM 正在推理/生成（这一步还没出结果）
+最后事件 = tool/call      ⇒ 工具正在执行，data.name 就是工具名
+最后事件 = turn/end       ⇒ 这一轮结束了
+```
+
+**这个文件是 35 MB / 解压后 128 MB**，但它是**多帧 zstd** —— 每个帧能独立解压，
+所以 `bridge/event_tail.py` 只 seek 到末尾 400 KB，找到帧头，解最后 ~9 KB
+就能拿到最近的事件，耗时几毫秒。
+
+**优先级：**
+
+```
+文件超过 20 秒没更新   ⇒ offline
+有等答问题            ⇒ question
+llmRetry / retry 事件  ⇒ retrying
+最后事件 = tool/call   ⇒ tool        （带工具名）
+turn 还开着            ⇒ thinking
+最后事件 = turn/end    ⇒ done（8 秒内）
 其余                   ⇒ idle
 ```
 
@@ -127,8 +154,10 @@ deploy/                    可选：systemd 单元
 
 ## 已知限制
 
-- 只有四态。**「等你批准」和「等你输入」暂时分辨不出来** —— DSH 的状态记账里
-  没有稳定信号，硬猜不如不猜。
+- **「等待审批」还做不了**：当前 `permissions.approval` 是 `never`（不需要审批），
+  没有样本可以观察「审批挂起」时长什么样。等遇到实际场景再补。
+- 「思考中」的判据是「最后事件是 `step/start`」—— 推理期间事件流不会写入，
+  所以这个判据是对的；但如果某一步的推理极短（<采样间隔），可能一闪而过。
 - 桥绑 `0.0.0.0`，局域网内任何设备都能读。内容只有状态元数据，没有对话内容。
 - 素材还没做，现在是纯色圆点。后续会换成鲸鱼娘。
 

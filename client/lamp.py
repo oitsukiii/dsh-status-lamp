@@ -8,8 +8,11 @@
 
 状态与颜色
 ----------
-    working   绿   有一个 turn 开着（包含模型推理期间）
+    question  黄   有等你回答的问题
     retrying  红   正在重试 LLM 请求
+    tool      蓝   正在执行工具（标题里带工具名）
+    thinking  绿   LLM 正在推理/生成
+    done      青   刚完成一轮（8 秒内）
     idle      灰白 没有进行中的 turn
     offline   暗灰 状态桥连不上，或状态文件太久没更新
 
@@ -49,18 +52,28 @@ BG_KEY = "#010203"
 SIZE = 64          # 灯的直径（像素）
 MARGIN = 14        # 留白，给光晕
 
+# 每个状态一个颜色。顺序按「越需要你注意，越靠前」。
 PALETTE = {
-    "working":  {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},
-    "retrying": {"core": "#e74c3c", "glow": "#f5b7b1", "ring": "#922b21"},
-    "idle":     {"core": "#b8b8b0", "glow": "#e8e8e2", "ring": "#8a8a82"},
-    "offline":  {"core": "#4a4a48", "glow": "#6e6e6a", "ring": "#2a2a28"},
+    "question":  {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：等你回答
+    "retrying":  {"core": "#e74c3c", "glow": "#f5b7b1", "ring": "#922b21"},  # 红：重试
+    "tool":      {"core": "#3498db", "glow": "#aed6f1", "ring": "#1f618d"},  # 蓝：调工具
+    "thinking":  {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},  # 绿：推理/生成
+    "done":      {"core": "#1abc9c", "glow": "#a3e4d7", "ring": "#117864"},  # 青：刚完成
+    "idle":      {"core": "#b8b8b0", "glow": "#e8e8e2", "ring": "#8a8a82"},  # 灰白：空闲
+    "offline":   {"core": "#4a4a48", "glow": "#6e6e6a", "ring": "#2a2a28"},  # 暗灰：离线
+    # 兼容旧版桥（只返回 working）
+    "working":   {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},
 }
 
 LABEL = {
-    "working": "工作中",
-    "retrying": "重试中",
-    "idle": "空闲",
-    "offline": "离线",
+    "question":  "等你回答",
+    "retrying":  "重试中",
+    "tool":      "调工具",
+    "thinking":  "思考中",
+    "done":      "完成",
+    "idle":      "空闲",
+    "offline":   "离线",
+    "working":   "工作中",
 }
 
 
@@ -205,10 +218,17 @@ class Lamp:
             state = "offline"
 
         bits = [LABEL[state]]
+        # 调工具时把工具名也显示出来，这是信息量最大的一项
+        if state == "tool" and data.get("tool"):
+            bits[-1] = f"{LABEL[state]} · {data['tool']}"
+        if data.get("phase") and data.get("phase") != "unknown":
+            bits.append(f"[{data['phase']}]")
         if data.get("turn") is not None:
             bits.append(f"轮次 {data['turn']}")
         if data.get("context_ratio") is not None:
             bits.append(f"上下文 {data['context_ratio'] * 100:.0f}%")
+        if data.get("pending_questions"):
+            bits.append(f"待答 {data['pending_questions']}")
         if data.get("reason"):
             bits.append(str(data["reason"]))
         self.detail = " · ".join(bits)

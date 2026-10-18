@@ -31,8 +31,17 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 
+try:
+    from event_tail import current_phase, read_tail_events
+except ImportError:  # 作为包被导入时
+    from .event_tail import current_phase, read_tail_events
+
 DSH_HOME = os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh"))
 PROJCACHE_DIR = os.path.join(DSH_HOME, "storages", "session_projcache", "sessions")
+SESSIONS_DIR = os.path.join(DSH_HOME, "sessions")
+
+# 「完成」状态只亮这么多秒，之后回到空闲。
+DONE_WINDOW_MS = 8000
 
 # 状态文件这么久没更新，就认为 DSH 没在跑。
 STALE_SECONDS = 20.0
@@ -44,6 +53,26 @@ def _newest_session_file() -> Optional[str]:
         return None
     # 文件名里带 uuid，但 mtime 才是「最近活跃」的可靠依据。
     return max(files, key=os.path.getmtime)
+
+
+def _newest_event_log() -> Optional[str]:
+    """最新的 session.v4.jsonl.zstd —— 用来读「此刻在做什么」。"""
+    best: Optional[str] = None
+    best_m = 0.0
+    try:
+        for proj in os.listdir(SESSIONS_DIR):
+            sess_dir = os.path.join(SESSIONS_DIR, proj)
+            if not os.path.isdir(sess_dir):
+                continue
+            for name in os.listdir(sess_dir):
+                log = os.path.join(sess_dir, name, "session.v4.jsonl.zstd")
+                if os.path.isfile(log):
+                    m = os.path.getmtime(log)
+                    if m > best_m:
+                        best_m, best = m, log
+    except OSError:
+        return None
+    return best
 
 
 def _ratio(ctx: dict[str, Any]) -> Optional[float]:
@@ -86,13 +115,37 @@ def read_state() -> dict[str, Any]:
     open_turn = turn_boundary.get("openTurnStartSeq")
     last_step = (turn_boundary.get("lastStepBoundary") or {}).get("kind")
 
-    # 判据优先级：文件太旧 > 在重试 > 有 turn 开着 > 空闲
+    # 等待回答的问题（DSH 会把待答问题记在这里）
+    questions = (rows.get("userQuestions") or {}).get("val") or {}
+    q_active = ((questions.get("questions") or {}).get("active")) or []
+
+    # 事件流尾部 → 此刻在做什么。读失败不影响主流程。
+    phase: dict[str, Any] = {}
+    try:
+        log = _newest_event_log()
+        if log:
+            events = read_tail_events(log, want=24)
+            phase = current_phase(events)
+            if phase.get("phase") == "done" and events:
+                last_ms = events[-1].get("time") or 0
+                if last_ms and (time.time() * 1000 - last_ms) > DONE_WINDOW_MS:
+                    phase = {"phase": "idle"}
+    except Exception:  # 事件流只是加分项，坏了也不能拖垮状态
+        phase = {}
+
+    # 优先级：离线 > 等回答 > 重试 > 调工具 > 思考 > 完成 > 空闲
     if age > STALE_SECONDS:
         state = "offline"
-    elif retry:
+    elif q_active:
+        state = "question"
+    elif retry or phase.get("phase") == "retrying":
         state = "retrying"
+    elif phase.get("phase") == "tool":
+        state = "tool"
     elif open_turn is not None:
-        state = "working"
+        state = "thinking"
+    elif phase.get("phase") == "done":
+        state = "done"
     else:
         state = "idle"
 
@@ -106,6 +159,9 @@ def read_state() -> dict[str, Any]:
         "retry": bool(retry),
         "subagent": bool(subagent),
         "context_ratio": _ratio(context),
+        "phase": phase.get("phase"),
+        "tool": phase.get("tool"),
+        "pending_questions": len(q_active),
         "updated_at": now,
     }
 
