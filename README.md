@@ -114,9 +114,26 @@ AGENTS.md          给用户 agent 的部署指南
 ```
 Python 3.9+
 tkinter           （Python 自带）
-Pillow            可选，没有就画圆点
-zstd              可选，没有就只剩「忙/闲」判断
 ```
+
+**两个可选项：**
+
+| 依赖 | 作用 | 没有会怎样 |
+|---|---|---|
+| `Pillow` | 显示像素风素材 | 退化成画一个圆点 |
+| `pyzstd` 或 `zstd` 命令 | 读事件流，分辨「思考中/调工具」 | 只能判断「忙/闲」 |
+
+```bash
+pip install pillow pyzstd
+```
+
+**Windows 上建议装 `pyzstd`** —— `zstd` 命令行在 Windows 上没有现成包
+（winget 里搜不到），而 pyzstd 一行 pip 就能装。
+
+**Linux/macOS 一般自带 `zstd` 命令，不用额外装。**
+
+**⚠️ 桥只读事件流【尾部】的几 KB**（多帧 zstd 可以独立解压每帧），
+所以哪怕是 37 MB 的日志，读取也只要几毫秒。
 
 ---
 

@@ -88,10 +88,30 @@ for _cand in (_HERE, os.path.dirname(_HERE)):
             sys.path.insert(0, _cand)
         break
 
-from dsh_lamp.backends import FileBackend, SseBackend, make_backend  # noqa: E402
+from dsh_lamp.backends import (FileBackend, SseBackend, make_backend,  # noqa: E402
+                               zstd_available)
 from dsh_lamp.paths import config_file, dsh_home  # noqa: E402
 
 DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
+
+# 项目地址 —— 发布到 GitHub 后把这里换成真实地址，复制出去的提示词就会跟着变
+REPO_URL = "https://github.com/<你的用户名>/dsh-status-lamp"
+
+# 「复制给 agent」的内容：一段可以直接发给 DSH 的提示词
+AGENT_PROMPT = f"""请帮我部署一个「DSH 状态灯」的服务端桥。
+
+项目地址：{REPO_URL}
+
+请阅读仓库根目录的 AGENTS.md，按里面的步骤：
+1. 在这台机器上安装并常驻运行状态桥（bridge/state_bridge.py）
+2. 放行防火墙，但只对局域网放行 3099 端口
+3. 完成后告诉我一个可以填进状态灯客户端的地址，格式是 http://<局域网IP>:3099/events
+
+注意事项：
+- 不要修改 DSH 的任何配置
+- 不要重启 DSH（会中断我正在进行的会话）
+- 不要把 3099 暴露到公网（这个端口没有认证）
+"""
 
 DEFAULT_CONFIG = {
     "mode": "local",                       # local | lan
@@ -408,7 +428,7 @@ class Lamp:
         """设置窗口：选模式、填地址、测连接、保存并重连。"""
         dlg = tk.Toplevel(self.root)
         dlg.title("DSH 状态灯 — 设置")
-        dlg.geometry("560x300")
+        dlg.geometry("580x470")
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
@@ -427,6 +447,11 @@ class Lamp:
         ent.pack(padx=24, anchor="w")
 
         tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(anchor="w", padx=24, pady=(10, 0))
+
+        if not zstd_available():
+            tk.Label(dlg, justify="left", wraplength=520, fg="#c80", font=("", 8),
+                     text="⚠️ 没找到 zstd 命令：只显示「忙/闲」，看不到「思考中/调工具」。\n"
+                          "   Windows 可用 winget install zstd 安装。").pack(anchor="w", padx=24)
         status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
         status.pack(anchor="w", padx=24, pady=(6, 0))
 
@@ -463,6 +488,28 @@ class Lamp:
             self._n_push = 0
             self._start_backend()          # 立刻用新配置重连
             status.configure(text="✓ 已保存并重连", fg="#2a7")
+
+        # ── 没有桥时：让用户自己的 DSH 去部署 ──
+        guide = tk.LabelFrame(dlg, text="  局域网模式下没有桥？  ")
+        guide.pack(fill="x", padx=14, pady=(10, 4))
+
+        tk.Label(guide, justify="left", wraplength=520, fg="#555",
+                 text="点下面的按钮复制一段指令，发给你的 DSH，"
+                      "让它配好服务器端软件并把桥地址回给你。").pack(
+            anchor="w", padx=10, pady=(6, 4))
+
+        def _copy_prompt() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(AGENT_PROMPT)
+            status.configure(text="✓ 已复制，发给你的 DSH 即可", fg="#2a7")
+
+        tk.Button(guide, text="复制配置指令", command=_copy_prompt).pack(
+            anchor="w", padx=10, pady=(0, 8))
+
+        tk.Label(guide, justify="left", wraplength=520, fg="#888",
+                 font=("", 8),
+                 text=f"（项目地址：{REPO_URL}）").pack(
+            anchor="w", padx=10, pady=(0, 6))
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)

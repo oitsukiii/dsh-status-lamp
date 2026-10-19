@@ -18,10 +18,26 @@ step 结束时更新），所以判断不了「此刻在干什么」。事件流
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
 from typing import Any, Optional
+
+# 解压 zstd 有两条路，优先用 pyzstd：
+#   ① pyzstd（pip install pyzstd）—— 跨平台、不依赖外部命令 ✓ 推荐
+#   ② zstd 命令行 —— Linux/macOS 一般自带，Windows 上通常没有
+try:
+    import pyzstd  # type: ignore
+    _HAS_PYZSTD = True
+except ImportError:
+    _HAS_PYZSTD = False
+
+try:
+    import shutil as _shutil
+    _HAS_ZSTD_CLI = _shutil.which("zstd") is not None
+except Exception:
+    _HAS_ZSTD_CLI = False
 
 # 往后读这么多字节去找帧头。实测 200 KB 里有 20 个帧头，够用。
 TAIL_WINDOW = 400_000
@@ -38,19 +54,54 @@ INTERESTING = {
 }
 
 
+def decompressor_available() -> bool:
+    """有没有能解 zstd 的办法（决定能不能读到细粒度状态）。"""
+    return _HAS_PYZSTD or _HAS_ZSTD_CLI
+
+
 def _decompress(chunk: bytes) -> Optional[str]:
-    """解压一段从帧头开始的 zstd 数据；不是合法起点就返回 None。"""
+    """解压一段从帧头开始的 zstd 数据；不是合法起点就返回 None。
+
+    这堆字节可能是「几个完整帧 + 一个被截断的尾巴」，两种解码器都要能容忍：
+    · pyzstd: 读到坏帧就抛异常，取它已经解出来的部分
+    · zstd 命令行: 解到坏帧会返回非零码，但 stdout 里仍有前面解好的内容
+    """
     if not chunk.startswith(FRAME_MAGIC):
         return None
-    try:
-        proc = subprocess.run(
-            ["zstd", "-dc"], input=chunk, capture_output=True, timeout=10
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if proc.returncode != 0 and not proc.stdout:
-        return None
-    return proc.stdout.decode("utf-8", "replace")
+
+    if _HAS_PYZSTD:
+        # 流式解码：能容忍尾部被截断（跨帧连续读）
+        try:
+            dctx = pyzstd.ZstdDecompressor()
+            out = bytearray()
+            with dctx.stream_reader(io.BytesIO(chunk)) as reader:
+                while True:
+                    piece = reader.read(65536)
+                    if not piece:
+                        break
+                    out += piece
+            if out:
+                return bytes(out).decode("utf-8", "replace")
+        except Exception:
+            pass
+        # 退一步：当作单块解（某些版本对小输入更宽松）
+        try:
+            return pyzstd.decompress(chunk).decode("utf-8", "replace")
+        except Exception:
+            pass
+
+    if _HAS_ZSTD_CLI:
+        try:
+            proc = subprocess.run(
+                ["zstd", "-dc"], input=chunk, capture_output=True, timeout=10
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if proc.returncode != 0 and not proc.stdout:
+            return None
+        return proc.stdout.decode("utf-8", "replace")
+
+    return None
 
 
 def read_tail_events(path: str, want: int = 40) -> list[dict[str, Any]]:

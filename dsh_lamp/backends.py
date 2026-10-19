@@ -43,6 +43,15 @@ class BaseBackend:
         raise NotImplementedError
 
 
+def zstd_available() -> bool:
+    """事件流是 zstd 多帧压缩的，读它需要 zstd 命令行。
+
+    没有 zstd 也能跑 —— 只是只能判断「忙/闲」，读不到「思考中/调工具」。
+    """
+    import shutil
+    return shutil.which("zstd") is not None
+
+
 class FileBackend(BaseBackend):
     """本机模式：直接读 $DSH_HOME 下的文件，不需要桥、不需要网络。"""
 
