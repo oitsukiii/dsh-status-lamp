@@ -36,6 +36,8 @@ import argparse
 import json
 import os
 import sys
+import queue
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -76,8 +78,52 @@ try:
 except ImportError:  # pragma: no cover
     _HAS_PIL = False
 
-DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://192.168.2.102:3099/state")
-POLL_MS = 700
+# 让脚本能找到 dsh_lamp 包。两种部署形态都要支持：
+#   ① 仓库结构：<repo>/client/lamp.py + <repo>/dsh_lamp/
+#   ② 散装结构：<dir>/lamp.py       + <dir>/dsh_lamp/
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _cand in (_HERE, os.path.dirname(_HERE)):
+    if os.path.isdir(os.path.join(_cand, "dsh_lamp")):
+        if _cand not in sys.path:
+            sys.path.insert(0, _cand)
+        break
+
+from dsh_lamp.backends import FileBackend, SseBackend, make_backend  # noqa: E402
+from dsh_lamp.paths import config_file, dsh_home  # noqa: E402
+
+DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
+
+DEFAULT_CONFIG = {
+    "mode": "local",                       # local | lan
+    "server": "http://127.0.0.1:3099/events",
+    "sound": True,
+}
+
+
+def load_config() -> dict:
+    cfg = dict(DEFAULT_CONFIG)
+    try:
+        with open(config_file(), encoding="utf-8") as fh:
+            cfg.update(json.load(fh))
+    except (OSError, ValueError):
+        pass
+    if os.environ.get("DSH_LAMP_URL"):     # 环境变量优先，方便临时覆盖
+        cfg["server"] = os.environ["DSH_LAMP_URL"]
+        cfg["mode"] = "lan"
+    return cfg
+
+
+def save_config(cfg: dict) -> None:
+    os.makedirs(os.path.dirname(config_file()), exist_ok=True)
+    with open(config_file(), "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, ensure_ascii=False, indent=2)
+POLL_MS = 700          # 仅在 SSE 不可用时退化使用
+# SSE 读超时：必须大于桥的心跳间隔（20 秒），否则会误判断线。
+# 没有这个超时的话，如果对端静默消失（桥卡死、网线拔掉），
+# recv() 会永远阻塞 —— 灯不报错也不重连，静默死掉。
+SSE_READ_TIMEOUT = 45.0
+RECONNECT_MIN = 1.0    # 断线重连的最短等待
+RECONNECT_MAX = 30.0   # 最长等待
 
 # 透明色键：窗口里所有这个颜色的像素会被系统抠掉，从而实现「只有灯、没有窗口」。
 BG_KEY = "#ff00ff"   # 洋红：灯罩是深灰，用近黑会误吃抗锯齿边缘
@@ -126,16 +172,53 @@ LABEL = {
 
 
 def fetch_state(url: str, timeout: float = 2.0) -> dict:
+    """一次性查状态 —— 只作 SSE 不可用时的退路。"""
+    base = url.rsplit("/", 1)[0]
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        with urllib.request.urlopen(base + "/state", timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as exc:
         return {"state": "offline", "reason": f"{exc.__class__.__name__}"}
 
 
+def sse_worker(url: str, q: "queue.Queue") -> None:
+    """后台线程：连 SSE 长连接，收到一条处理一条。
+
+    tkinter 不是线程安全的，所以 on_state 里必须用 root.after() 切回主线程。
+    断线后指数退避重连 —— 否则桥重启一次灯就永远死了。
+    """
+    backoff = RECONNECT_MIN
+    while True:
+        try:
+            req = urllib.request.Request(url, headers={
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+            })
+            with urllib.request.urlopen(req, timeout=SSE_READ_TIMEOUT) as resp:
+                backoff = RECONNECT_MIN          # 连上了就重置退避
+                for raw in resp:
+                    line = raw.decode("utf-8", "replace").strip()
+                    if not line or line.startswith(":"):
+                        continue                      # 心跳，忽略
+                    if not line.startswith("data:"):
+                        continue
+                    try:
+                        state = json.loads(line[5:].strip())
+                    except ValueError:
+                        continue
+                    q.put(state)          # 只入队，绝不碰 tkinter
+        except Exception:
+            pass
+        # 断线：退避后重连
+        time.sleep(backoff)
+        backoff = min(backoff * 2, RECONNECT_MAX)
+
+
 class Lamp:
-    def __init__(self, url: str, topmost: bool = True) -> None:
-        self.url = url
+    def __init__(self, cfg: dict, topmost: bool = True) -> None:
+        self.cfg = cfg
+        self.url = cfg["server"]
+        self._backend = None
         self.state = "offline"
         self.detail = ""
         self._last_state = None
@@ -153,6 +236,8 @@ class Lamp:
             # 非 Windows 平台没有这个属性，退化成半透明整窗
             self.root.attributes("-alpha", 0.92)
 
+        self._q: queue.Queue = queue.Queue()
+        self._n_push = 0
         self._photos: dict[str, object] = {}
         self._assets = self._load_assets()
         self.w, self.h = self._window_size()
@@ -173,7 +258,24 @@ class Lamp:
         self.canvas.bind("<Button-3>", self._on_menu)
 
         self._build_menu()
-        self.poll()
+        # 启动顺序优化：
+        # 旧版先同步 fetch_state()，最坏会卡 2 秒才出窗口，而这时 SSE 还没连 ✗
+        # 现在直接连 SSE（首条推送就是当前状态），窗口立刻出来。
+        self._start_backend()
+        self.root.after(80, self._drain)            # 主线程排空队列
+        self.root.after(2500, self._fallback_fetch)  # 兜底：2.5s 还没收到就主动查一次
+
+    def _start_backend(self) -> None:
+        """按配置起后端：本机读文件 / 局域网连桥。"""
+        if self._backend is not None:
+            self._backend.stop()
+        self._backend = make_backend(self.cfg, self._q.put)
+        self._backend.start()
+
+    def _fallback_fetch(self) -> None:
+        """SSE 首条推送迟迟没来时的退路（比如桥没起、网络慢）。"""
+        if self._n_push == 0:
+            self._apply(fetch_state(self.url))
 
     # ---------- 位置记忆 ----------
 
@@ -290,6 +392,9 @@ class Lamp:
         self.menu = tk.Menu(self.root, tearoff=0)
         self.menu.add_command(label="立刻刷新", command=self.poll)
         self.menu.add_command(label="回到右下角", command=self._reset_pos)
+        self.menu.add_separator()
+        self.menu.add_command(label="设置…", command=self.open_settings)
+        self.menu.add_separator()
         self.var_top = tk.BooleanVar(value=True)
         self.menu.add_checkbutton(label="始终置顶", variable=self.var_top,
                                   command=self._toggle_topmost)
@@ -298,6 +403,73 @@ class Lamp:
 
     def _on_menu(self, ev) -> None:
         self.menu.tk_popup(ev.x_root, ev.y_root)
+
+    def open_settings(self) -> None:
+        """设置窗口：选模式、填地址、测连接、保存并重连。"""
+        dlg = tk.Toplevel(self.root)
+        dlg.title("DSH 状态灯 — 设置")
+        dlg.geometry("560x300")
+        dlg.attributes("-topmost", True)
+        dlg.resizable(False, False)
+
+        mode = tk.StringVar(value=self.cfg.get("mode", "local"))
+        server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
+        sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
+
+        tk.Label(dlg, text="数据来源", font=("", 10, "bold")).pack(anchor="w", padx=14, pady=(14, 4))
+        tk.Radiobutton(dlg, text="本机模式 —— 直接读本机的 DSH 数据（零配置）",
+                       variable=mode, value="local", command=lambda: _sync()).pack(anchor="w", padx=24)
+        tk.Radiobutton(dlg, text="局域网模式 —— 连接另一台机器上的桥",
+                       variable=mode, value="lan", command=lambda: _sync()).pack(anchor="w", padx=24)
+
+        tk.Label(dlg, text="桥地址（仅局域网模式）").pack(anchor="w", padx=14, pady=(10, 2))
+        ent = tk.Entry(dlg, textvariable=server, width=62)
+        ent.pack(padx=24, anchor="w")
+
+        tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(anchor="w", padx=24, pady=(10, 0))
+        status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
+        status.pack(anchor="w", padx=24, pady=(6, 0))
+
+        def _sync() -> None:
+            ent.configure(state="normal" if mode.get() == "lan" else "disabled")
+
+        def _test() -> None:
+            if mode.get() == "local":
+                try:
+                    from dsh_lamp.state import read_state
+                    st = read_state(None)
+                    status.configure(text=f"✓ 读到了：{st.get('state')}（轮次 {st.get('turn')}）", fg="#2a7")
+                except Exception as e:
+                    status.configure(text=f"✗ 读取失败：{e}", fg="#c33")
+                return
+            url = server.get().strip()
+            base = url.rsplit("/", 1)[0]
+            try:
+                with urllib.request.urlopen(base + "/state", timeout=4) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                status.configure(text=f"✓ 连上了：{data.get('state')}", fg="#2a7")
+            except Exception as e:
+                status.configure(text=f"✗ 连不上：{e.__class__.__name__}", fg="#c33")
+
+        def _save() -> None:
+            self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
+                             "sound": bool(sound.get())})
+            self.url = self.cfg["server"]
+            try:
+                save_config(self.cfg)
+            except OSError as e:
+                status.configure(text=f"✗ 保存失败：{e}", fg="#c33")
+                return
+            self._n_push = 0
+            self._start_backend()          # 立刻用新配置重连
+            status.configure(text="✓ 已保存并重连", fg="#2a7")
+
+        bar = tk.Frame(dlg)
+        bar.pack(side="bottom", fill="x", padx=14, pady=12)
+        tk.Button(bar, text="测试连接", command=_test).pack(side="left")
+        tk.Button(bar, text="保存并重连", command=_save).pack(side="right")
+        tk.Button(bar, text="取消", command=dlg.destroy).pack(side="right", padx=8)
+        _sync()
 
     def _reset_pos(self) -> None:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
@@ -309,8 +481,24 @@ class Lamp:
 
     # ---------- 轮询 ----------
 
+    def _drain(self) -> None:
+        """主线程排空队列 —— 这是 tkinter + 线程唯一安全的方式。"""
+        got = 0
+        try:
+            while got < 20:
+                data = self._q.get_nowait()
+                self._n_push += 1
+                self._apply(data)
+                got += 1
+        except queue.Empty:
+            pass
+        self.root.after(100, self._drain)
+
     def poll(self) -> None:
-        data = fetch_state(self.url)
+        """退路：SSE 没连上时的一次性查询。"""
+        self._apply(fetch_state(self.url))
+
+    def _apply(self, data: dict) -> None:
         state = data.get("state", "offline")
         if state not in PALETTE:
             state = "offline"
@@ -331,6 +519,9 @@ class Lamp:
             bits.append(str(data["reason"]))
         self.detail = " · ".join(bits)
 
+        if os.environ.get("DSH_LAMP_DEBUG"):
+            print(f"[lamp] push#{self._n_push} state={state} phase={data.get('phase')}",
+                  flush=True)
         if state != self._last_state:
             prev = self._last_state
             self.state = state
@@ -338,10 +529,10 @@ class Lamp:
             self._draw()
             # 只在【进入】完成态时响，且不是从离线恢复过来的噪声
             if state == "done" and prev not in (None, "offline"):
-                play_done_sound()
+                if self.cfg.get("sound", True):
+                    play_done_sound()
 
-        self.root.title(f"DSH — {self.detail}")
-        self.root.after(POLL_MS, self.poll)
+        self.root.title(f"DSH — {self.detail}  [推送 {self._n_push}]")
 
     def run(self) -> None:
         self.root.mainloop()
@@ -349,10 +540,17 @@ class Lamp:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="DSH status lamp")
-    ap.add_argument("--url", default=DEFAULT_URL, help="状态桥地址")
+    ap.add_argument("--url", default=None, help="强制使用局域网模式并指定桥地址")
+    ap.add_argument("--local", action="store_true", help="强制本机模式")
     ap.add_argument("--no-topmost", action="store_true")
     args = ap.parse_args()
-    Lamp(args.url, topmost=not args.no_topmost).run()
+
+    cfg = load_config()
+    if args.url:
+        cfg["mode"], cfg["server"] = "lan", args.url
+    if args.local:
+        cfg["mode"] = "local"
+    Lamp(cfg, topmost=not args.no_topmost).run()
 
 
 if __name__ == "__main__":

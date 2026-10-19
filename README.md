@@ -1,156 +1,128 @@
 # DSH Status Lamp
 
-一个浮在所有窗口之上的小圆灯，实时显示 **DSH 正在干什么**。
+一个浮在所有窗口之上的小灯，实时显示 **DSH 正在干什么**。
 
-| 颜色 | 状态 | 判据 |
-|---|---|---|
-| 🟡 黄 | **等你回答** | `userQuestions.questions.active` 非空 |
-| 🔴 红 | **重试中** | `llmRetry` 非空，或最后事件是 `llm/retry` |
-| 🔵 蓝 | **调工具中** | 最后事件是 `tool/call`（标题带工具名，如 `调工具 · bash`）|
-| 🟢 绿 | **思考中** | 最后事件是 `step/start`，且 turn 还开着 |
-| 🟦 青 | **刚完成** | 最后事件是 `turn/end`，保持 3 分钟；下一次 turn 会立刻打断它 |
-| ⚪ 灰白 | **空闲** | `openTurnStartSeq` 为 null |
-| ⚫ 暗灰 | **离线** | 状态文件超过 20 秒没更新，或桥连不上 |
+| 颜色 | 状态 |
+|---|---|
+| 🟡 黄 | DSH 在干活（思考 / 输出 / 调工具）|
+| 🔴 红 | 需要你介入（有等你回答的问题）|
+| 🟢 绿 | 刚完成（默认保持 3 分钟）|
+| ⚪ 全灭 | 空闲 |
+| ⚫ 全灭 + 「离线」| 连不上 / 状态文件太久没更新 |
 
-## 为什么要单独做这个
+## 两种模式
 
-DSH 自带的状态看不见：Web UI 里只有一个转圈，切到别的窗口就完全没感觉。
-社区的桌宠插件大多是**页面内**的，离开浏览器标签页就消失。
+### 本机模式（默认，推荐）
 
-这个项目做两件事：
-
-1. **从 DSH 落盘的状态里读到真实情况** —— 包括「模型正在推理」，这是让 agent
-   自己上报时永远拿不到的状态（它在思考时无法调用工具）。
-2. **把状态送到你眼前** —— 一个置顶、无边框、只有灯没有窗口的小圆点。
-
-零 token 成本，不经过 agent，不修改 DSH。
-
-## 架构
+**灯和 DSH 跑在同一台机器上 —— 零配置、零网络。**
 
 ```
-DSH（NAS）──落盘──> session_projcache/*.json
-                           │
-                    state_bridge.py   （只读，HTTP :3099）
-                           │
-                    局域网 HTTP GET /state
-                           │
-                     lamp.py （Windows 上跑的圆灯）
+双击 lamp.py → 它直接读 ~/.dsh 下的状态文件 → 完事
 ```
 
-**为什么分两半**：DSH 可能跑在 NAS 上，而灯要在你的 Windows 桌面上。
-让 agent 主动往客户端推送也能实现同样的效果，但那样拿不到「推理中」这个状态，
-而且每次上报都要消耗一次工具调用。
+不需要起额外的服务、不需要填地址、不需要开端口。
+
+### 局域网模式
+
+**DSH 在另一台机器上（NAS / VPS / 家里的服务器）。**
+
+需要一个「状态桥」把文件变成 HTTP。**不用你手动装 —— 把
+[`AGENTS.md`](AGENTS.md) 发给你自己的 DSH，让它帮你部署。**
+
+```
+1. 把 AGENTS.md 的内容（或链接）发给你的 DSH
+2. agent 会装好桥、开好端口，然后给你一行地址：
+      http://192.168.1.50:3099/events
+3. 灯 右键 → 设置… → 选「局域网模式」→ 粘贴地址 → 测试连接 → 保存
+```
+
+---
 
 ## 快速开始
 
-### 1. NAS 侧（DSH 所在机器）
-
-```sh
-python3 bridge/state_bridge.py --port 3099
+```bash
+pip install pillow          # 可选，没有就退化成画圆点
+python client/lamp.py
 ```
 
-验证：
+**Windows 上把 `.py` 关联到 `pythonw.exe` 双击即可。**
 
-```sh
-curl http://127.0.0.1:3099/state
-```
+**右键菜单：** 立刻刷新 / 回到右下角 / 始终置顶 / **设置…** / 退出
+**左键拖动：** 移动位置（记忆在配置目录）
 
-应该返回类似：
+---
 
-```json
-{
-  "state": "working",
-  "age_s": 1.2,
-  "session": "2d52b395-368",
-  "turn": 714,
-  "open_turn": true,
-  "last_step": "start",
-  "retry": false,
-  "subagent": false,
-  "context_ratio": 0.331
-}
-```
+## 状态是怎么判定的
 
-### 2. Windows 侧
+两个数据源，互补：
 
-```bat
-pythonw client\lamp.py --url http://<NAS的IP>:3099/state
-```
+| 来源 | 新鲜度 | 能判断 |
+|---|---|---|
+| `session_projcache/*.json` | 慢（1~8 秒）| 忙 / 闲 |
+| `sessions/*/session.v4.jsonl.zstd` | 较快（2~3 秒）| 思考 / 调工具 / 完成 |
 
-`pythonw` 不带控制台窗口。双击 `client\run-lamp.bat` 也行。
-
-### 3. 验证
-
-```sh
-python3 tools/verify-state.py --url http://<NAS的IP>:3099/state
-```
-
-## 状态怎么判定的
-
-### 两个数据源
-
-**① `projcache`（快，判忙闲）** —— `$DSH_HOME/storages/session_projcache/sessions/session-*.json`：
-
-`record.rows.turnBoundary.val`：
-
-| 字段 | 含义 |
-|---|---|
-| `openTurnStartSeq` | **非 null 就表示有一个 turn 还没结束** —— 这是「忙」的权威判据 |
-| `lastStepBoundary.kind` | `start` / `end`，当前 step 是否在进行 |
-| `llmRetry` | 非空 ⇒ 正在重试 |
-| `subagent` | 非空 ⇒ 子代理在跑 |
-| `contextPressure` | 上下文占用量 / 窗口大小 |
-
-**② 事件流（细，判「此刻在干什么」）** —— `session.v4.jsonl.zstd`
-
-`sessionStats` 里的 `toolMs` / `llmMs` 是**事后汇总**的（只在 step 结束时更新），
-所以判断不了「此刻」。真正即时的是事件流：
+**判据：**
 
 ```
-最后事件 = step/start     ⇒ LLM 正在推理/生成（这一步还没出结果）
-最后事件 = tool/call      ⇒ 工具正在执行，data.name 就是工具名
-最后事件 = turn/end       ⇒ 这一轮结束了
+openTurnStartSeq 非空        ⇒ 有一个 turn 没结束 ⇒ 忙
+事件流最后一条是 tool/call   ⇒ 正在跑工具（带工具名）
+事件流最后一条是 turn/end    ⇒ 刚完成
+userQuestions.active 非空    ⇒ 等你回答
+llmRetry 非空                ⇒ 正在重试
 ```
 
-**这个文件是 35 MB / 解压后 128 MB**，但它是**多帧 zstd** —— 每个帧能独立解压，
-所以 `bridge/event_tail.py` 只 seek 到末尾 400 KB，找到帧头，解最后 ~9 KB
-就能拿到最近的事件，耗时几毫秒。
-
-**优先级：**
+**⚠️ 为什么不能用「让 agent 自己上报」：**
 
 ```
-文件超过 20 秒没更新   ⇒ offline
-有等答问题            ⇒ question
-llmRetry / retry 事件  ⇒ retrying
-最后事件 = tool/call   ⇒ tool        （带工具名）
-turn 还开着            ⇒ thinking
-最后事件 = turn/end    ⇒ done（8 秒内）
-其余                   ⇒ idle
+agent 在推理时无法调用工具 ⇒ 它报不出「我正在想」
+⇒ 这个状态只有从外部观测才拿得到
 ```
 
-**已验证**：四个空闲会话全部是 `openTurnStartSeq: null` + `kind: "end"`，
-正在跑的会话是 `openTurnStartSeq: <数字>` + `kind: "start"`，判据一致。
+---
 
-## 界面
+## 延迟
 
-| 操作 | 效果 |
-|---|---|
-| 左键拖动 | 移动位置（松手后记住，存在 `%APPDATA%\dsh-status-lamp.pos`）|
-| 右键 | 菜单：立刻刷新 / 回到右下角 / 始终置顶 / 退出 |
-| 双击 | 立刻刷新 |
+```
+DSH 落盘              2~4 秒   ← 主要来源，改不动
+桥内部检查            200 毫秒
+客户端                ~0（SSE 推送，不是轮询）
+```
 
-**透明背景**靠 Windows 的 `-transparentcolor` 色键实现，所以灯之外的部分
-完全不挡视线，也不用整窗半透明。
+**⇒ 实测从「发消息」到「黄灯亮」约 2~4 秒，取决于是否撞上 DSH 的 flush 周期。**
+
+---
 
 ## 目录
 
 ```
-bridge/state_bridge.py     状态桥（NAS 侧，纯标准库）
-client/lamp.py             圆灯（Windows 侧，纯标准库）
-client/run-lamp.bat        双击启动
-tools/verify-state.py      连通性与状态合理性检查
-deploy/                    可选：systemd 单元
+dsh_lamp/          核心库（两种模式共用）
+  state.py         从落盘数据推导状态
+  event_tail.py    读事件流尾部（不解压整个文件）
+  paths.py         跨平台路径
+  backends.py      FileBackend（本机）/ SseBackend（局域网）
+client/lamp.py     显示层
+bridge/state_bridge.py   状态桥（仅局域网模式需要）
+tools/             验证脚本、素材生成
+assets/states/     五张状态图
+AGENTS.md          给用户 agent 的部署指南
 ```
+
+---
+
+## 依赖
+
+```
+Python 3.9+
+tkinter           （Python 自带）
+Pillow            可选，没有就画圆点
+zstd              可选，没有就只剩「忙/闲」判断
+```
+
+---
+
+## License
+
+MIT
 
 ## 关于「已读」
 
@@ -183,6 +155,7 @@ python3 bridge/state_bridge.py --done-seconds 0     # 永不超时
 **`--done-seconds 0` 的副作用**：绿灯永不过期，「空闲（全灭）」就不再出现。
 想要空闲可见就给个有限值 —— 这也是默认用 180 秒的原因。
 
+
 ## 提示音
 
 任务完成（进入 `done`）时播放 `assets/sounds/notify.wav`。
@@ -194,6 +167,7 @@ python3 bridge/state_bridge.py --done-seconds 0     # 永不超时
 · 从离线恢复不会误响
 ```
 
+
 ## 已知限制
 
 - **「等待审批」还做不了**：当前 `permissions.approval` 是 `never`（不需要审批），
@@ -202,7 +176,3 @@ python3 bridge/state_bridge.py --done-seconds 0     # 永不超时
   所以这个判据是对的；但如果某一步的推理极短（<采样间隔），可能一闪而过。
 - 桥绑 `0.0.0.0`，局域网内任何设备都能读。内容只有状态元数据，没有对话内容。
 - 素材还没做，现在是纯色圆点。后续会换成鲸鱼娘。
-
-## License
-
-MIT

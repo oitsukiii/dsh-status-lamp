@@ -23,18 +23,28 @@
 from __future__ import annotations
 
 import argparse
-import glob
 import json
 import os
+import sys
+import threading
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Optional
 
-try:
-    from event_tail import current_phase, read_tail_events
-except ImportError:  # 作为包被导入时
-    from .event_tail import current_phase, read_tail_events
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+from dsh_lamp.state import read_state, state_hash  # noqa: E402
+
+# ── SSE 推送：每个客户端一条长连接，服务器维护连接列表 ──
+_clients: list = []
+_clients_lock = threading.Lock()
+
+HEARTBEAT_SECONDS = 20      # 心跳间隔（防止中间设备清理空闲连接）
+WATCH_INTERVAL = 0.2        # 服务器内部检查状态的间隔（本地读文件，很便宜）
 
 DSH_HOME = os.environ.get("DSH_HOME", os.path.expanduser("~/.dsh"))
 PROJCACHE_DIR = os.path.join(DSH_HOME, "storages", "session_projcache", "sessions")
@@ -54,135 +64,67 @@ DONE_WINDOW_MS: Optional[int] = 180_000
 STALE_SECONDS = 20.0
 
 
-def _newest_session_file() -> Optional[str]:
-    files = glob.glob(os.path.join(PROJCACHE_DIR, "session-*.json"))
-    if not files:
-        return None
-    # 文件名里带 uuid，但 mtime 才是「最近活跃」的可靠依据。
-    return max(files, key=os.path.getmtime)
+def _state_hash(state: dict) -> str:
+    """只有状态真的变了才推。
+
+    必须剔除每次读取都会变的时间字段，否则哈希永远不同 ⇒ 每 200ms 推一次 ✗
+    """
+    stable = {k: v for k, v in state.items() if k not in VOLATILE}
+    return hashlib.sha1(
+        json.dumps(stable, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
 
 
-def _newest_event_log() -> Optional[str]:
-    """最新的 session.v4.jsonl.zstd —— 用来读「此刻在做什么」。"""
-    best: Optional[str] = None
-    best_m = 0.0
-    try:
-        for proj in os.listdir(SESSIONS_DIR):
-            sess_dir = os.path.join(SESSIONS_DIR, proj)
-            if not os.path.isdir(sess_dir):
-                continue
-            for name in os.listdir(sess_dir):
-                log = os.path.join(sess_dir, name, "session.v4.jsonl.zstd")
-                if os.path.isfile(log):
-                    m = os.path.getmtime(log)
-                    if m > best_m:
-                        best_m, best = m, log
-    except OSError:
-        return None
-    return best
+def broadcast(payload: bytes) -> None:
+    """往所有连着的客户端写一份；写失败的就从列表里剔除。"""
+    with _clients_lock:
+        dead = []
+        for handler in _clients:
+            try:
+                handler.wfile.write(payload)
+                handler.wfile.flush()
+            except Exception:
+                dead.append(handler)
+        for handler in dead:
+            try:
+                _clients.remove(handler)
+            except ValueError:
+                pass
 
 
-def _ratio(ctx: dict[str, Any]) -> Optional[float]:
-    used = ctx.get("surfaceTokens")
-    total = ctx.get("contextWindow")
-    if not used or not total:
-        return None
-    return round(used / total, 3)
+def _watch_loop() -> None:
+    """状态一变就推。这是服务器内部的检查，和客户端轮询无关。"""
+    last = None
+    while True:
+        try:
+            state = read_state()
+            h = _state_hash(state)
+            if h != last:
+                last = h
+                broadcast(("data: " + json.dumps(state, ensure_ascii=False)
+                           + "\n\n").encode("utf-8"))
+        except Exception:
+            pass
+        time.sleep(WATCH_INTERVAL)
 
 
-def read_state() -> dict[str, Any]:
-    """把 DSH 的落盘状态折叠成一个给客户端看的 JSON。"""
-    path = _newest_session_file()
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-
-    if path is None:
-        return {"state": "offline", "reason": "no-session-file", "updated_at": now}
-
-    age = time.time() - os.path.getmtime(path)
-    session = os.path.basename(path).removeprefix("session-").removesuffix(".json")
-
-    try:
-        with open(path, encoding="utf-8") as fh:
-            doc = json.load(fh)
-    except (OSError, json.JSONDecodeError) as exc:
-        return {
-            "state": "offline",
-            "reason": f"read-error: {exc.__class__.__name__}",
-            "age_s": round(age, 1),
-            "session": session[:12],
-            "updated_at": now,
-        }
-
-    rows = (doc.get("record") or {}).get("rows") or {}
-    turn_boundary = (rows.get("turnBoundary") or {}).get("val") or {}
-    retry = (rows.get("llmRetry") or {}).get("val") or {}
-    subagent = (rows.get("subagent") or {}).get("val") or {}
-    context = (rows.get("contextPressure") or {}).get("val") or {}
-
-    open_turn = turn_boundary.get("openTurnStartSeq")
-    last_step = (turn_boundary.get("lastStepBoundary") or {}).get("kind")
-
-    # 等待回答的问题（DSH 会把待答问题记在这里）
-    questions = (rows.get("userQuestions") or {}).get("val") or {}
-    q_active = ((questions.get("questions") or {}).get("active")) or []
-
-    # 事件流尾部 → 此刻在做什么。读失败不影响主流程。
-    phase: dict[str, Any] = {}
-    try:
-        log = _newest_event_log()
-        if log:
-            events = read_tail_events(log, want=24)
-            phase = current_phase(events)
-            if phase.get("phase") == "done" and events and DONE_WINDOW_MS is not None:
-                last_ms = events[-1].get("time") or 0
-                if last_ms and (time.time() * 1000 - last_ms) > DONE_WINDOW_MS:
-                    phase = {"phase": "idle"}
-    except Exception:  # 事件流只是加分项，坏了也不能拖垮状态
-        phase = {}
-
-    # 优先级：离线 > 等回答 > 重试 > 调工具 > 思考 > 完成 > 空闲
-    if age > STALE_SECONDS:
-        state = "offline"
-    elif q_active:
-        state = "question"
-    elif retry or phase.get("phase") == "retrying":
-        state = "retrying"
-    elif phase.get("phase") == "tool":
-        state = "tool"
-    elif open_turn is not None:
-        state = "thinking"
-    elif phase.get("phase") == "done":
-        state = "done"
-    else:
-        state = "idle"
-
-    return {
-        "state": state,
-        "age_s": round(age, 1),
-        "session": session[:12],
-        "turn": turn_boundary.get("lastTurn"),
-        "open_turn": open_turn is not None,
-        "last_step": last_step,
-        "retry": bool(retry),
-        "subagent": bool(subagent),
-        "context_ratio": _ratio(context),
-        "phase": phase.get("phase"),
-        "tool": phase.get("tool"),
-        "pending_questions": len(q_active),
-        "done_age_s": (
-            round((time.time() * 1000 - (events[-1].get("time") or 0)) / 1000, 1)
-            if phase.get("phase") in ("done",) and events else None
-        ),
-        "updated_at": now,
-    }
+def _heartbeat_loop() -> None:
+    """SSE 注释行当心跳，客户端会忽略，但网络设备看到有流量就不会断。"""
+    while True:
+        time.sleep(HEARTBEAT_SECONDS)
+        broadcast(b": ping\n\n")
 
 
 class _Handler(BaseHTTPRequestHandler):
     server_version = "dsh-state-bridge/1.0"
 
-    def do_GET(self) -> None:  # noqa: N802 (BaseHTTPRequestHandler 的命名约定)
-        if self.path.split("?")[0] not in ("/state", "/"):
-            self.send_error(404, "only /state is served")
+    def do_GET(self) -> None:  # noqa: N802
+        path = self.path.split("?")[0]
+        if path == "/events":
+            self._serve_events()
+            return
+        if path not in ("/state", "/"):
+            self.send_error(404, "only /state and /events are served")
             return
         try:
             payload = json.dumps(read_state(), ensure_ascii=False).encode("utf-8")
@@ -197,6 +139,35 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
+
+    def _serve_events(self) -> None:
+        """SSE：连接建立后不返回，一直挂着，由 _watch_loop 往里推。"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        try:
+            # 先推一条当前状态，客户端不用等下一次变化
+            self.wfile.write(("data: " + json.dumps(read_state(),
+                               ensure_ascii=False) + "\n\n").encode("utf-8"))
+            self.wfile.flush()
+        except Exception:
+            return
+        with _clients_lock:
+            _clients.append(self)
+        print(f"[bridge] client connected (total {len(_clients)})")
+        try:
+            # 挂住这条连接。写操作全部由 broadcast 在别的线程完成。
+            while True:
+                time.sleep(3600)
+        except Exception:
+            pass
+        finally:
+            with _clients_lock:
+                if self in _clients:
+                    _clients.remove(self)
+                print(f"[bridge] client gone (total {len(_clients)})")
 
     def log_message(self, fmt: str, *args: Any) -> None:  # 静默，别刷屏
         pass
@@ -214,6 +185,9 @@ def main() -> None:
 
     # 0（或负数）表示永不超时：绿灯只被下一次 turn 打断
     DONE_WINDOW_MS = int(args.done_seconds * 1000) if args.done_seconds > 0 else None
+
+    threading.Thread(target=_watch_loop, daemon=True).start()
+    threading.Thread(target=_heartbeat_loop, daemon=True).start()
 
     srv = ThreadingHTTPServer((args.host, args.port), _Handler)
     print(f"dsh-state-bridge listening on http://{args.host}:{args.port}/state")

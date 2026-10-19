@@ -6,5 +6,5 @@ dist/
 build/
 *.log
 config.local.json
-.state-cache/
 assets/preview/
+deploy/seq/
