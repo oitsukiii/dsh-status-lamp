@@ -101,8 +101,11 @@ if sys.platform == "win32":
         _SOUND_OK = False
 
 
-def play_done_sound() -> None:
-    """任务完成时响一下。异步播放，不阻塞 UI。"""
+def play_alert_sound() -> None:
+    """需要你注意的时候响一下 —— 任务完成，或者需要你介入。
+
+    异步播放，不阻塞 UI。
+    """
     if not _SOUND_OK:
         return
     try:
@@ -1134,10 +1137,12 @@ class Lamp:
             self.state = state
             self._last_state = state
             self._draw()
-            # 只在【进入】完成态时响，且不是从离线恢复过来的噪声
-            if state == "done" and prev is not None:
+            # 进入「完成」或「需要你介入」时响一下。
+            # prev is not None 是为了跳过第一帧 —— 否则启动时会把当前状态当成一次切换。
+            # 红灯两个子原因（审批/提问）都算 question，state 没变就不会重复响。
+            if state in ("done", "question") and prev is not None:
                 if self.cfg.get("sound", True):
-                    play_done_sound()
+                    play_alert_sound()
 
         self.root.title(f"DSH — {self.detail}  [推送 {self._n_push}]")
 

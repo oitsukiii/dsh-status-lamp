@@ -50,7 +50,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "why1": "为什么要安装解码器：DSH 的详细日志是使用 zstd 压缩储存的，",
         "why2": "需要装一个 zstd 解码器才能读取“思考中、调用工具”这类状态。",
         # 其他
-        "sound": "任务完成时播放提示音",
+        "sound": "完成或需要你介入时播放提示音",
         "breath": "灯光呼吸效果",
         "size": "灯的大小",
         "size_small": "小", "size_medium": "中", "size_large": "大",
@@ -153,7 +153,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "dep_manual": "Or run: pip install pyzstd",
         "why1": "Why: DSH stores its detailed log with zstd compression,",
         "why2": "so a decoder is needed to read states like thinking or running a tool.",
-        "sound": "Play a sound when a task completes",
+        "sound": "Play a sound when a task finishes or needs you",
         "breath": "Breathe the light",
         "size": "Lamp size",
         "size_small": "Small", "size_medium": "Medium", "size_large": "Large",
