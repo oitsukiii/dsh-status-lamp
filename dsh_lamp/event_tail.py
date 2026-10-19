@@ -24,9 +24,17 @@ import os
 import subprocess
 from typing import Any, Optional
 
-# 解压 zstd 有两条路，优先用 pyzstd：
-#   ① pyzstd（pip install pyzstd）—— 跨平台、不依赖外部命令 ✓ 推荐
-#   ② zstd 命令行 —— Linux/macOS 一般自带，Windows 上通常没有
+# 解压 zstd 的三条路，按「零依赖程度」排序：
+#   ① compression.zstd —— Python 3.14+ 的标准库 ✓✓ 真正零依赖
+#   ② pyzstd（pip install pyzstd）—— 3.9~3.13 的通行做法
+#   ③ zstd 命令行 —— Linux/macOS 一般自带，Windows 上通常没有
+try:
+    from compression import zstd as _stdlib_zstd  # type: ignore  # Python 3.14+
+    _HAS_STDLIB = True
+except ImportError:
+    _stdlib_zstd = None
+    _HAS_STDLIB = False
+
 try:
     import pyzstd  # type: ignore
     _HAS_PYZSTD = True
@@ -56,7 +64,18 @@ INTERESTING = {
 
 def decompressor_available() -> bool:
     """有没有能解 zstd 的办法（决定能不能读到细粒度状态）。"""
-    return _HAS_PYZSTD or _HAS_ZSTD_CLI
+    return _HAS_STDLIB or _HAS_PYZSTD or _HAS_ZSTD_CLI
+
+
+def decompressor_kind() -> str:
+    """当前用的是哪种解码器 —— 给设置窗口显示。"""
+    if _HAS_STDLIB:
+        return "stdlib"      # Python 3.14+ 自带
+    if _HAS_PYZSTD:
+        return "pyzstd"
+    if _HAS_ZSTD_CLI:
+        return "cli"
+    return "none"
 
 
 def _decompress(chunk: bytes) -> Optional[str]:
@@ -68,6 +87,25 @@ def _decompress(chunk: bytes) -> Optional[str]:
     """
     if not chunk.startswith(FRAME_MAGIC):
         return None
+
+    if _HAS_STDLIB:
+        # Python 3.14+ 的标准库解码器。多帧 + 截断尾巴也要容忍。
+        try:
+            out = bytearray()
+            with _stdlib_zstd.ZstdFile(io.BytesIO(chunk), "rb") as fh:
+                while True:
+                    piece = fh.read(65536)
+                    if not piece:
+                        break
+                    out += piece
+            if out:
+                return bytes(out).decode("utf-8", "replace")
+        except Exception:
+            pass
+        try:
+            return _stdlib_zstd.decompress(chunk).decode("utf-8", "replace")
+        except Exception:
+            pass
 
     if _HAS_PYZSTD:
         # 流式解码：能容忍尾部被截断（跨帧连续读）

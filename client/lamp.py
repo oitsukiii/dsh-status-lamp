@@ -448,10 +448,18 @@ class Lamp:
 
         tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(anchor="w", padx=24, pady=(10, 0))
 
-        if not zstd_available():
+        from dsh_lamp.event_tail import decompressor_kind
+        kind = decompressor_kind()
+        if kind == "none":
             tk.Label(dlg, justify="left", wraplength=520, fg="#c80", font=("", 8),
-                     text="⚠️ 没找到 zstd 命令：只显示「忙/闲」，看不到「思考中/调工具」。\n"
-                          "   Windows 可用 winget install zstd 安装。").pack(anchor="w", padx=24)
+                     text="⚠️ 没有可用的 zstd 解码器：只显示「忙/闲」，"
+                          "看不到「思考中/调工具」。\n"
+                          "   升级到 Python 3.14（标准库自带），"
+                          "或 pip install pyzstd。").pack(anchor="w", padx=24)
+        else:
+            tk.Label(dlg, justify="left", wraplength=520, fg="#888", font=("", 8),
+                     text=f"zstd 解码：{kind}（stdlib = Python 3.14+ 自带）").pack(
+                anchor="w", padx=24)
         status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
         status.pack(anchor="w", padx=24, pady=(6, 0))
 

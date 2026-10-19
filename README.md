@@ -121,16 +121,20 @@ tkinter           （Python 自带）
 | 依赖 | 作用 | 没有会怎样 |
 |---|---|---|
 | `Pillow` | 显示像素风素材 | 退化成画一个圆点 |
-| `pyzstd` 或 `zstd` 命令 | 读事件流，分辨「思考中/调工具」 | 只能判断「忙/闲」 |
+| zstd 解码器 | 读事件流，分辨「思考中/调工具」 | 只能判断「忙/闲」 |
 
-```bash
-pip install pillow pyzstd
-```
+**zstd 有三条路，按零依赖程度排序：**
 
-**Windows 上建议装 `pyzstd`** —— `zstd` 命令行在 Windows 上没有现成包
-（winget 里搜不到），而 pyzstd 一行 pip 就能装。
+| 方式 | 要求 | 装法 |
+|---|---|---|
+| **`compression.zstd`** | **Python 3.14+** | **不用装 ✓✓ 标准库自带** |
+| `pyzstd` | Python 3.9+ | `pip install pyzstd` |
+| `zstd` 命令 | 系统有 | `apt install zstd` / `brew install zstd` |
 
-**Linux/macOS 一般自带 `zstd` 命令，不用额外装。**
+**⇒ 用 Python 3.14 的话，真的一个依赖都不用装。**
+（3.12/3.13 装 pyzstd；Windows 上 winget 搜不到 zstd 命令行）
+
+**设置窗口会显示当前用的是哪种解码器。**
 
 **⚠️ 桥只读事件流【尾部】的几 KB**（多帧 zstd 可以独立解压每帧），
 所以哪怕是 37 MB 的日志，读取也只要几毫秒。

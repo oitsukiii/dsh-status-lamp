@@ -44,12 +44,13 @@ class BaseBackend:
 
 
 def zstd_available() -> bool:
-    """事件流是 zstd 多帧压缩的，读它需要 zstd 命令行。
+    """能不能解 zstd（决定能否读到细粒度状态）。
 
-    没有 zstd 也能跑 —— 只是只能判断「忙/闲」，读不到「思考中/调工具」。
+    三条路都算：Python 3.14 标准库 / pyzstd / zstd 命令行。
+    不能解也能跑 —— 只是只能判断「忙/闲」。
     """
-    import shutil
-    return shutil.which("zstd") is not None
+    from .event_tail import decompressor_available
+    return decompressor_available()
 
 
 class FileBackend(BaseBackend):
