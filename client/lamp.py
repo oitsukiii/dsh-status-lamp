@@ -758,6 +758,9 @@ class Lamp:
             self._settings_dlg = None
 
         dlg = tk.Toplevel(self.root)
+        # 先藏起来再搭界面：Toplevel 一创建就会以默认位置出现在屏幕上，
+        # 等我们算完尺寸、居中之后再显示，就不会先闪在角落再跳到中间。
+        dlg.withdraw()
         L = self.lang
         dlg.title(t("settings_title", L))
         dlg.attributes("-topmost", True)
@@ -896,6 +899,7 @@ class Lamp:
         # ── 灯语说明 ──
         def _show_lamp_language() -> None:
             d = tk.Toplevel(dlg)
+            d.withdraw()
             d.title(t("lang_title", L))
             d.attributes("-topmost", True)
             d.resizable(False, False)
@@ -953,6 +957,7 @@ class Lamp:
             d.update_idletasks()
             d.geometry(f"{d.winfo_reqwidth()}x{d.winfo_reqheight()}")
             self._center(d)
+            d.deiconify()
 
         # ── 保存 ──
         def _save() -> None:
@@ -1003,8 +1008,16 @@ class Lamp:
         tk.Button(bar, text=t("cancel", L), command=_close_settings).pack(side="right")
         tk.Button(bar, text=t("save", L), command=_save).pack(side="right", padx=8)
 
-        dlg.after_idle(_fit_height)
-        dlg.after(20, lambda: self._center(dlg))
+        def _fit_and_show() -> None:
+            try:
+                dlg.update_idletasks()
+                dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
+                self._center(dlg)
+            except Exception:
+                pass
+            dlg.deiconify()
+
+        dlg.after_idle(_fit_and_show)
 
 
     def _reset_pos(self) -> None:
