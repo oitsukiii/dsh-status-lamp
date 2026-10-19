@@ -130,8 +130,7 @@ for _cand in (_HERE, os.path.dirname(_HERE)):
             sys.path.insert(0, _cand)
         break
 
-from dsh_lamp.backends import (FileBackend, SseBackend, make_backend,  # noqa: E402
-                               zstd_available)
+from dsh_lamp.backends import (FileBackend, SseBackend, make_backend)  # noqa: E402
 from dsh_lamp.i18n import (LANGS, LANG_NAMES, normalize,  # noqa: E402
                            t)
 
