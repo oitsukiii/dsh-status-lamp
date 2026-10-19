@@ -1,6 +1,6 @@
 # DSH Status Lamp
 
-A traffic-light desktop widget for Windows, with a matching DSH plugin. One glance tells you what DSH is doing: yellow 🟡 while it works, red 🔴 when it needs you, green 🟢 when the turn is done.
+A traffic-light desktop widget for Windows, with a matching DSH plugin. One glance tells you what DSH is doing: yellow 🟡 while it works, red 🔴 when it needs you, green 🟢 when the turn is done. It can chime as well.
 
 No window switching, no log tailing. A glance out of the corner of your eye.
 
