@@ -21,7 +21,6 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 - [4. Technical notes](#4-technical-notes)
   - [4.1 How the state is derived](#41-how-the-state-is-derived)
   - [4.2 On read receipts](#42-on-read-receipts----can-the-green-wait-until-i-have-read-the-messages)
-  - [4.3 Behaviour](#43-behaviour)
 - [5. License](#5-license)
 - [6. Changelog](#6-changelog)
 
@@ -201,17 +200,6 @@ the client being online             -- a background tab counts as online
 **Making the green depend on reading would mean changing the DSH web client**: report when a message enters the viewport, add an event type, and have the plugin subscribe to it. That is a change to DSH itself, not to this lamp.
 
 **So this lamp answers "what is DSH doing", not "have you read it".**
-
-### 4.3 Behaviour
-
-- **Breathing** dims only the lit bulb, never the housing; turning it off returns to full brightness
-- **Sound** plays a chime when a turn ends, or when the lamp turns red because it needs you
-- **Size** small / medium / large, keeping the window where it was
-- **Bilingual** Chinese and English, switching immediately in both the menu and the windows
-- **High DPI** declares per-monitor DPI awareness, so text stays sharp on scaled displays
-- **Sprite handling** the scripts under `tools/` trim the side tabs, recolour the unlit bulbs and generate the brightness steps
-
----
 
 ## 5. License
 
