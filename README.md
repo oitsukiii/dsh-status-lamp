@@ -73,12 +73,9 @@
 
 **桥的装法**（装在哪台机器上，灯就填哪台机的地址）：
 
-| | 怎么装 | 特点 |
-|---|---|---|
-| **DSH 插件**（推荐） | 在 DSH 的「插件」页添加 `github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp`，重启 DSH | 随 DSH 起停，不用管进程；直接订阅会话事件，**最快** |
-| **Python 桥**（备选） | 见 [`docs/python-bridge.md`](docs/python-bridge.md) | 不用重启 DSH；但要装 Python 和 zstd 解码器，还得自己守住进程 |
-
-两者对外接口完全一致，灯的配置不用改。
+桥是 `packages/dsh-lamp` 这个 DSH 插件：在 DSH 的「插件」页添加
+`github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp`，重启 DSH 即可。
+它随 DSH 起停，不用管进程。
 
 ---
 
@@ -120,10 +117,6 @@ github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
 **方式 B · 让 agent 代劳**
 
 把设置窗口里「复制提示词」按钮复制的那段发给 DSH 那台机器上的 agent，它会装好并把地址告诉你。
-
-**方式 C · Python 桥**（不想装插件时用）
-
-见 [`docs/python-bridge.md`](docs/python-bridge.md)。这条要多装 Python 和 zstd 解码器，还得自己守住进程，所以排在最后。
 
 装好之后，把灯设置里的地址填成桥所在的那台机器：
 
@@ -176,8 +169,7 @@ DSH 提交事件 ──► 插件同步 fold ──► SSE 推给灯
 **局限**：受 DSH 落盘时机影响，快照懒写的时候会滞后；要装 zstd 解码器；
 快照和日志各取最新的，理论上可能来自不同会话。
 
-Python 桥仍然保留（见 [`docs/python-bridge.md`](docs/python-bridge.md)），
-但推荐用插件。
+
 
 ### 4.2 关于「已读」
 

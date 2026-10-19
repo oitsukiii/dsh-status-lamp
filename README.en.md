@@ -73,12 +73,9 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 **Where the bridge goes** (and the address is that same machine):
 
-| | How | |
-|---|---|---|
-| **DSH plugin** (recommended) | Add `github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp` in DSH's Plugins page, then restart DSH | Starts with DSH, no process to watch, and subscribes to session events directly -- **the fastest** |
-| **Python bridge** (fallback) | See [`docs/python-bridge.md`](docs/python-bridge.md) | No DSH restart needed, but it needs Python and a zstd decoder, and you have to keep it running |
-
-Both expose the same endpoints, so the lamp's configuration does not change.
+The bridge is the `packages/dsh-lamp` DSH plugin: add
+`github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp` in DSH's Plugins page
+and restart DSH. It starts and stops with DSH; there is no process to watch.
 
 ---
 
@@ -120,10 +117,6 @@ Then restart DSH.
 **B · Let the agent do it**
 
 Send the text the "Copy prompt" button puts on your clipboard to the agent on the DSH machine. It installs the plugin and replies with the address.
-
-**C · Python bridge** (when you would rather not install a plugin)
-
-See [`docs/python-bridge.md`](docs/python-bridge.md). This route needs Python and a zstd decoder as well, and you have to keep the process alive, which is why it comes last.
 
 Either way, point the lamp's address at the machine holding the bridge:
 
@@ -178,9 +171,6 @@ frame header and decompressing only the last few hundred kilobytes.
 **Limits**: tied to DSH's write timing, so it lagged whenever the snapshot was stale;
 needed a zstd decoder; and the snapshot and the log were each chosen by newest mtime,
 so in principle they could belong to different sessions.
-
-The Python bridge remains (see [`docs/python-bridge.md`](docs/python-bridge.md)), but
-the plugin is the recommended route.
 
 ### 4.2 On read receipts
 
