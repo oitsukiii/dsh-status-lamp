@@ -535,18 +535,20 @@ class Lamp:
                  "装一次即可，约 1 MB。")
 
         def _refresh_dep() -> None:
-            """按钮和说明【始终可见】—— 有解码器时按钮变成「重新安装」。"""
+            """按钮和说明【始终可见】，且按钮位置固定在最左侧。
+
+            两种状态只是按钮文字不同、右边多不多一个「解码：xxx ✓」标签而已。
+            """
             from dsh_lamp.event_tail import decompressor_kind
             kind = decompressor_kind()
-            if kind == "none":
-                dep_label.pack_forget()
-                install_btn.configure(text="一键安装解码器")
-                install_btn.pack(side="left", anchor="w")
-            else:
+            install_btn.pack_forget()
+            dep_label.pack_forget()
+            install_btn.configure(
+                text="一键安装解码器" if kind == "none" else "重新安装解码器")
+            install_btn.pack(side="left", anchor="w")
+            if kind != "none":
                 dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
-                dep_label.pack(side="left", anchor="w")
-                install_btn.configure(text="重新安装解码器")
-                install_btn.pack(side="left", anchor="w", padx=(10, 0))
+                dep_label.pack(side="left", anchor="w", padx=(10, 0))
             # 说明文字任何情况下都保留
             why_label.pack(anchor="w", padx=14, pady=(4, 0))
 
@@ -575,10 +577,12 @@ class Lamp:
                     _refresh_dep()
                     status.configure(text="✓ 装好了——重启软件生效", fg="#2a7")
                 else:
-                    dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
-                    dep_label.pack(side="left", anchor="w")
+                    install_btn.pack_forget()
+                    dep_label.pack_forget()
                     install_btn.configure(text="重新安装解码器")
-                    install_btn.pack(side="left", anchor="w", padx=(10, 0))
+                    install_btn.pack(side="left", anchor="w")
+                    dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
+                    dep_label.pack(side="left", anchor="w", padx=(10, 0))
                     status.configure(text="可以手动执行：pip install pyzstd", fg="#c33")
 
             threading.Thread(target=work, daemon=True).start()
