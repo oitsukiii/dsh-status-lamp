@@ -62,16 +62,21 @@ The bridge is `bridge/state_bridge.py`. It does one thing: turn DSH's on-disk st
 
 ## Getting started
 
-### Requirements
+### Download (Windows)
 
-- Python 3.9+
-- Pillow, for the sprites (without it the lamp falls back to a drawn circle)
-- A zstd decoder, for the event log (optional but recommended):
+[**Download DSH-Lamp.exe**](https://github.com/oitsukiii/dsh-status-lamp/releases/latest) — no Python needed, just run it.
+
+### From source
+
+Python 3.9+, plus:
+
+- **Pillow** — for the sprites (without it the lamp falls back to a drawn circle)
+- **A zstd decoder** — for the event log, optional but recommended:
   - Built in on Python 3.14+
   - Otherwise `pip install pyzstd`
   - **There is a one-click install button in settings**
 
-### Local mode (simplest)
+#### Local mode (simplest)
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -82,7 +87,7 @@ python client/lamp.py
 
 Right-click the lamp to open settings.
 
-### LAN mode
+#### LAN mode
 
 On the machine running DSH:
 

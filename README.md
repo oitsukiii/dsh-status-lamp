@@ -62,16 +62,21 @@ DSH 那台机器跑一个「状态桥」，客户端连过去：
 
 ## 快速开始
 
-### 需要什么
+### 直接下载（Windows）
 
-- Python 3.9+
-- Pillow（要显示图片素材；没有的话会退回画一个圆点）
-- zstd 解码器（读事件日志用，可选但强烈建议）：
+[**下载 DSH-Lamp.exe**](https://github.com/oitsukiii/dsh-status-lamp/releases/latest) —— 不需要装 Python，双击就能跑。
+
+### 从源码跑
+
+需要 Python 3.9+，另外：
+
+- **Pillow** —— 显示图片素材（没有就退回画一个圆点）
+- **zstd 解码器** —— 读事件日志用，可选但强烈建议：
   - Python 3.14+ 自带
   - 否则 `pip install pyzstd`
   - **设置窗口里有一键安装按钮**
 
-### 本机模式（最简单）
+#### 本机模式（最简单）
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -82,7 +87,7 @@ python client/lamp.py
 
 启动后右键灯可以打开设置。
 
-### 局域网模式
+#### 局域网模式
 
 在 **DSH 所在的那台机器**上：
 
