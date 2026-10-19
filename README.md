@@ -130,17 +130,46 @@ github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
 
 ### 状态是怎么判断的
 
-DSH 会写两样东西：
+两代实现，差别在「从哪儿拿状态」。
+
+#### v1.1.0 起（当前）：订阅会话事件
+
+桥是一个 DSH 插件，跑在 DSH 进程内，直接订阅 `session/event`：
+
+```
+DSH 提交事件 ──► 插件同步 fold ──► SSE 推给灯
+```
+
+| 事件 | 灯 |
+|---|---|
+| `approval/asked` | 🔴 需要你介入（等你点「允许」） |
+| `tool/call` 且工具名是 `ask_user_question` | 🔴 需要你介入（等你回答） |
+| `tool/call` | 🟡 正在干活（附工具名） |
+| `step/start` / `assistant/message` | 🟡 正在干活 |
+| `llm/retry` | 🟡 重试中 |
+| `turn/end` | 🟢 刚完成（保持 3 分钟） |
+
+**好处**：事件一提交就能看到，不用等落盘；不轮询、不解压、不需要 zstd 解码器；
+事件自带会话 id，不会把两个会话的数据拼在一起。
+
+#### v1.0.0：轮询快照 + 解压日志尾部
+
+没有插件，桥是独立进程，只能从磁盘读：
 
 | 数据 | 位置 | 特点 |
 |---|---|---|
 | 状态快照 | `~/.dsh/storages/session_projcache/sessions/*.json` | 结构化，但**写得很懒**（几十秒一次） |
 | 事件日志 | `~/.dsh/sessions/<项目>/<会话>/session.v4.jsonl.zstd` | 写得勤，但压缩过、几百 MB |
 
-**插件版**直接订阅 `session/event`，事件一提交就能看到 —— 不用轮询、不用解压。
-**Python 桥**退一步：轮询快照 + 解压事件日志尾部补细节，因此会受 DSH 落盘时机影响。
+于是要**同时**看两样：快照给粗粒度（有没有 turn 开着、有没有待审批的调用），
+事件日志给细粒度（`step/start` = 在推理、`tool/call` = 在跑工具）。
+事件日志用「跳到文件尾部找帧头、只解压最后几百 KB」的方式读，不整份解压。
 
-事件日志在 Python 桥里是「跳到文件尾部找帧头、只解压最后几百 KB」的方式读的，不整份解压。
+**局限**：受 DSH 落盘时机影响，快照懒写的时候会滞后；要装 zstd 解码器；
+快照和日志各取最新的，理论上可能来自不同会话。
+
+Python 桥仍然保留（见 [`docs/python-bridge.md`](docs/python-bridge.md)），
+但推荐用插件。
 
 ### 关于「已读」
 

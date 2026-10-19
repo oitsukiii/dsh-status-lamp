@@ -130,17 +130,49 @@ Lamp on another machine       ->  http://<that machine's LAN address>:3099/event
 
 ### How the state is derived
 
-DSH writes two things:
+Two generations, differing in where the state comes from.
+
+#### From v1.1.0 (current): subscribe to session events
+
+The bridge is a DSH plugin running inside the DSH process, subscribing to `session/event`:
+
+```
+DSH commits an event ──► plugin folds it ──► SSE pushes to the lamp
+```
+
+| Event | Lamp |
+|---|---|
+| `approval/asked` | 🔴 Needs you (waiting for allow) |
+| `tool/call` whose tool is `ask_user_question` | 🔴 Needs you (waiting for an answer) |
+| `tool/call` | 🟡 Working (with the tool name) |
+| `step/start` / `assistant/message` | 🟡 Working |
+| `llm/retry` | 🟡 Retrying |
+| `turn/end` | 🟢 Just finished (for three minutes) |
+
+**Why it is better**: an event is visible the moment it is committed, with no wait for
+a disk write; nothing polls, nothing decompresses, no zstd decoder is needed; and each
+event carries its session id, so two sessions cannot be mixed together.
+
+#### v1.0.0: poll the snapshot, decompress the log tail
+
+No plugin. The bridge was a separate process, so it could only read from disk:
 
 | Data | Location | Character |
 |---|---|---|
 | State snapshot | `~/.dsh/storages/session_projcache/sessions/*.json` | Structured, but **written lazily** (every few tens of seconds) |
 | Event log | `~/.dsh/sessions/<project>/<session>/session.v4.jsonl.zstd` | Written often, but compressed and hundreds of megabytes |
 
-The **plugin** subscribes to `session/event`, so an event is visible the moment it is committed -- no polling, no decompression.
-The **Python bridge** does it the hard way: polls the snapshot and decompresses the tail of the event log for detail, which ties it to DSH's write timing.
+So it had to watch both: the snapshot for coarse state (is a turn open, is a call
+waiting for approval) and the log for detail (`step/start` means reasoning,
+`tool/call` means running a tool). The log was read by seeking to the end, finding a
+frame header and decompressing only the last few hundred kilobytes.
 
-The event log is read by seeking to the end, finding a frame header and decompressing only the last few hundred kilobytes.
+**Limits**: tied to DSH's write timing, so it lagged whenever the snapshot was stale;
+needed a zstd decoder; and the snapshot and the log were each chosen by newest mtime,
+so in principle they could belong to different sessions.
+
+The Python bridge remains (see [`docs/python-bridge.md`](docs/python-bridge.md)), but
+the plugin is the recommended route.
 
 ### On read receipts
 
