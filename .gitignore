@@ -1,10 +1,17 @@
-__pycache__/
+
+# 本地运行时产物（不该进仓库）
+assets/preview/
+build/
+config.json
+config.local.json
+deploy/seq/
+dist/
+*.log
+*.log.*
+*.pid
 *.pyc
+__pycache__/
+.secrets/
+*.token
 .venv/
 venv/
-dist/
-build/
-*.log
-config.local.json
-assets/preview/
-deploy/seq/
