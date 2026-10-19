@@ -9,7 +9,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 ## Contents
 
 - [What the lamp means](#what-the-lamp-means)
-- [Two modes](#two-modes)
+- [Where the state comes from](#where-the-state-comes-from)
 - [Getting started](#getting-started)
 - [How the state is derived](#how-the-state-is-derived)
 - [Other bits](#other-bits)
@@ -37,27 +37,24 @@ The `Lamp states` button in the app shows this table with the actual sprites:
 
 ---
 
-## Two modes
+## Where the state comes from
 
-### Local — DSH runs on this computer
-
-No configuration. The client reads the files under `~/.dsh` directly. No network, no extra process.
-
-![Local mode settings](docs/images/settings-en-local.png)
-
-### LAN — DSH runs on another machine
-
-That machine runs a bridge, and the client connects to it:
+The lamp does one thing: connect to a bridge and read the state. There are two ways
+to install that bridge, and the lamp is configured the same either way -- one address.
 
 ```
-[DSH host]  ~/.dsh ──► state_bridge.py ──SSE──► [your machine] lamp
+Lamp and DSH on one machine  →  http://127.0.0.1:3099/events
+On another machine           →  http://<DSH host LAN address>:3099/events
 ```
 
-The bridge is `bridge/state_bridge.py`. It does one thing: turn DSH's on-disk state into one of four colours and push it out over HTTP + SSE.
+### Installing the bridge
 
-![LAN mode settings](docs/images/settings-en-lan.png)
+| | How | |
+|---|---|---|
+| **DSH plugin** (recommended) | Add `github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp` in DSH's Plugins page, then restart DSH | Starts with DSH, no process to watch, and subscribes to session events directly -- **the fastest** |
+| **Python bridge** (fallback) | See [`docs/python-bridge.md`](docs/python-bridge.md) | No DSH restart needed, but it needs Python and a zstd decoder, and you have to keep it running |
 
----
+Both expose the same endpoints, so the lamp's configuration does not change.
 
 ## Getting started
 
