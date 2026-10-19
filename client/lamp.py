@@ -451,7 +451,7 @@ class Lamp:
         """设置窗口：选模式后只显示该模式的配置。"""
         dlg = tk.Toplevel(self.root)
         dlg.title("DSH 状态灯 — 设置")
-        dlg.geometry("600x560")
+        dlg.geometry("600x620")
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
@@ -520,19 +520,16 @@ class Lamp:
         tk.Label(guide, justify="left", wraplength=500, fg="#888", font=("", 8),
                  text=f"项目地址：{REPO_URL}").pack(anchor="w", padx=10, pady=(0, 6))
 
-        # ── 通用选项 ──
-        tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(
-            anchor="w", padx=14, pady=(10, 0))
-
-        # 解码器状态
-        dep = tk.Frame(dlg)
-        dep.pack(anchor="w", fill="x", padx=14, pady=(8, 0))
-        dep_label = tk.Label(dep, justify="left", wraplength=420, font=("", 8))
+        # ── 解码器 ──
+        dep_box = tk.LabelFrame(dlg, text=" zstd 解码器 ")
+        dep_box.pack(fill="x", padx=14, pady=(10, 0))
+        dep = tk.Frame(dep_box)
+        dep.pack(anchor="w", fill="x", padx=8, pady=(6, 0))
+        dep_label = tk.Label(dep, justify="left", wraplength=400, font=("", 8))
         dep_label.pack(side="left", anchor="w")
-        why_label = tk.Label(dlg, justify="left", wraplength=560, fg="#999", font=("", 8),
-            text="为什么要装：DSH 的详细日志是 zstd 压缩存的，\n"
-                 "装个解码器才能读出「思考中 / 调工具」这类细粒度状态。\n"
-                 "装一次即可，约 1 MB。")
+        why_label = tk.Label(dep_box, justify="left", wraplength=520, fg="#999", font=("", 8),
+            text="为什么要安装解码器：DSH 的详细日志是使用 zstd 压缩储存的，\n"
+                 "需要装一个 zstd 解码器才能读取“思考中、调用工具”这类状态。")
 
         def _refresh_dep() -> None:
             """按钮和说明【始终可见】，且按钮位置固定在最左侧。
@@ -550,7 +547,7 @@ class Lamp:
                 dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
                 dep_label.pack(side="left", anchor="w", padx=(10, 0))
             # 说明文字任何情况下都保留
-            why_label.pack(anchor="w", padx=14, pady=(4, 0))
+            why_label.pack(anchor="w", padx=8, pady=(4, 8))
 
         def _one_click_install() -> None:
             install_btn.configure(state="disabled", text="安装中…")
@@ -588,6 +585,10 @@ class Lamp:
             threading.Thread(target=work, daemon=True).start()
 
         install_btn = tk.Button(dep, text="一键安装解码器", command=_one_click_install)
+
+        # ── 最下面：提示音开关 ──
+        tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(
+            anchor="w", padx=14, pady=(12, 0))
 
         status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
         status.pack(anchor="w", padx=14, pady=(6, 0))
