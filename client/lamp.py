@@ -528,7 +528,7 @@ class Lamp:
         dep_label = tk.Label(dep, justify="left", wraplength=420, font=("", 8))
         dep_label.pack(side="left", anchor="w")
         why_label = tk.Label(dlg, justify="left", wraplength=560, fg="#999", font=("", 8),
-            text="为什么要装：DSH 的详细日志是 zstd 压缩存的（37 MB 压缩 / 128 MB 解压），\n"
+            text="为什么要装：DSH 的详细日志是 zstd 压缩存的，\n"
                  "装个解码器才能读出「思考中 / 调工具」这类细粒度状态。\n"
                  "装一次即可，约 1 MB。")
 
