@@ -1,3 +1,14 @@
+# Python 桥部署指南（备选方案）
+
+> **首选是 DSH 插件。** 在 DSH 的「插件」页面添加
+> `github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp`，
+> 重启 DSH 后它就会监听 3099，随 DSH 启停，不用管进程。
+>
+> 这份文档只适用于你不想装插件、或者 DSH 那台机器上没有 DSH（只跑一个裸 Python）的情况。
+> Python 桥的代价：要装 Python + Pillow + zstd 解码器，还要自己守住进程。
+
+---
+
 # 部署 DSH 状态桥 —— 给 agent 的执行说明
 
 > **你是 DSH 的 agent。用户刚把这份文件发给你，想让你在自己的机器上

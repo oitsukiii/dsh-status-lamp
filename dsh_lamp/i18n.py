@@ -34,11 +34,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "conn_ok": "连接成功",
         "conn_fail": "连接失败",
         "bridge_addr": "桥地址",
-        "no_bridge": " 还没有桥？ ",
-        "copy_hint": "点下面的按钮复制一段指令，发给你服务器上的 DSH，"
-                     "让它配好服务器端软件并把桥地址发给你。",
-        "copy_btn": "复制配置指令",
-        "copied": "已复制，发给你的 DSH 即可",
+        "copy_hint": "还不知道地址？点下面的按钮复制一段指令，发给 DSH 那台机器上的 "
+                     "agent，它会装好服务端并把地址告诉你。",
         "project_url": "项目地址：{url}",
         # 解码器
         "dep_frame": " zstd 解码器 ",
@@ -69,7 +66,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "attention_question": "等你回答",
         "user_placeholder": "<用户名>",
         "frame_bridge": " 桥地址 ",
-        "bridge_hint": "同机填 127.0.0.1，另一台机器填它的 IP。插件或 Python 桥都行。",
+        "bridge_hint": "灯和 DSH 在同一台机器：http://127.0.0.1:3099/events\n"
+                       "灯在另一台机器：把 127.0.0.1 换成 DSH 那台机的局域网 IP。\n\n"
+                       "这个地址由 DSH 的「状态灯桥」插件提供。没有的话在 DSH 的插件页添加：\n"
+                       "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp",
         "need_addr": "请先填桥地址",
         "save": "保存并重连",
         "cancel": "取消",
@@ -124,12 +124,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "conn_ok": "Connected",
         "conn_fail": "Connect failed",
         "bridge_addr": "Bridge address",
-        "no_bridge": " No bridge yet? ",
-        "copy_hint": "Copy the instruction below and send it to the DSH on your "
-                     "server. It will set the server side up and reply with the "
-                     "bridge address.",
-        "copy_btn": "Copy setup prompt",
-        "copied": "Copied — send it to your DSH",
+        "copy_hint": "No address yet? Copy the instruction below and send it to the "
+                     "agent on the DSH machine. It will set the server side up and "
+                     "reply with the address.",
         "project_url": "Project: {url}",
         "dep_frame": " zstd decoder ",
         "dep_installed": "Installed",
@@ -157,7 +154,10 @@ STRINGS: dict[str, dict[str, str]] = {
         "attention_question": "Waiting for an answer",
         "user_placeholder": "<user>",
         "frame_bridge": " Bridge ",
-        "bridge_hint": "127.0.0.1 when the lamp is on the same machine, otherwise that machine's IP. The plugin or the Python bridge both work.",
+        "bridge_hint": "Lamp and DSH on one machine: http://127.0.0.1:3099/events\n"
+                       "On another machine: replace 127.0.0.1 with the DSH host's LAN address.\n\n"
+                       "That address comes from the Status Lamp Bridge plugin. Add it in DSH's Plugins page:\n"
+                       "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp",
         "need_addr": "Enter the bridge address first",
         "save": "Save and reconnect",
         "cancel": "Cancel",

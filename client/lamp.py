@@ -161,20 +161,7 @@ DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
 REPO_URL = "https://github.com/<你的用户名>/dsh-status-lamp"
 
 # 「复制给 agent」的内容：一段可以直接发给 DSH 的提示词
-AGENT_PROMPT = f"""请帮我部署一个「DSH 状态灯」的服务端桥。
 
-项目地址：{REPO_URL}
-
-请阅读仓库根目录的 AGENTS.md，按里面的步骤：
-1. 在这台机器上安装并常驻运行状态桥（bridge/state_bridge.py）
-2. 放行防火墙，但只对局域网放行 3099 端口
-3. 完成后告诉我一个可以填进状态灯客户端的地址，格式是 http://<局域网IP>:3099/events
-
-注意事项：
-- 不要修改 DSH 的任何配置
-- 不要重启 DSH（会中断我正在进行的会话）
-- 不要把 3099 暴露到公网（这个端口没有认证）
-"""
 
 DEFAULT_CONFIG = {
     "lang": "zh",                          # zh | en
@@ -783,20 +770,6 @@ class Lamp:
         conn_result.pack(side="left", padx=(8, 14))
         tk.Button(test_row, text=t("test_read", L), command=_test_read).pack(side="left")
         read_result.pack(side="left", padx=(8, 0))
-
-        # ── 怎么拿到地址 ──
-        guide = tk.LabelFrame(box, text=t("no_bridge", L))
-        guide.pack(fill="x", padx=12, pady=(0, 10))
-        tk.Label(guide, justify="left", wraplength=470, fg="#555",
-                 text=t("copy_hint", L)).pack(anchor="w", padx=10, pady=(6, 4))
-
-        def _copy_prompt() -> None:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(AGENT_PROMPT)
-            status.configure(text=t("copied", L), fg=OK)
-
-        tk.Button(guide, text=t("copy_btn", L), command=_copy_prompt).pack(
-            anchor="w", padx=10, pady=(0, 8))
 
         # ── 开关 ──
         tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
