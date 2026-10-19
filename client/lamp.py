@@ -211,7 +211,7 @@ LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
 
 # 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
 BREATH_LEVELS = 10     # 亮度档数（越多越平滑，也越占内存）
-BREATH_MIN = 0.70      # 最暗 = 70%
+BREATH_MIN = 0.50      # 最暗 = 50%
 BREATH_STEP_MS = 130   # 每档停留毫秒（10 档 × 130ms ≈ 一个方向 1.3 秒）
 MARGIN = 8         # 四周留白
 
@@ -532,13 +532,29 @@ class Lamp:
                       cx - r * 0.15, cy - r * 0.2,
                       fill="#ffffff", outline="", stipple="gray50")
 
+    def _refresh_frame(self) -> None:
+        """只换当前帧的图片，不重建 canvas item。"""
+        fn = STATE_IMAGE.get(self.state)
+        frames = self._assets.get(fn) if fn else None
+        if not frames:
+            return
+        photo = ImageTk.PhotoImage(frames[self._level])
+        self._photos[self.state] = photo
+        if self._item is not None:
+            self.canvas.itemconfigure(self._item, image=photo)
+
     def _breath_tick(self) -> None:
         """呼吸灯：三角波在 70%..100% 之间来回。
 
         只换 canvas 上的图片引用，不重建 item，开销很低。
         """
         try:
-            if self.cfg.get("breath", True):
+            if not self.cfg.get("breath", True):
+                # 关掉呼吸 ⇒ 固定在最亮那档
+                if self._level != BREATH_LEVELS - 1:
+                    self._level = BREATH_LEVELS - 1
+                    self._refresh_frame()
+            else:
                 n = BREATH_LEVELS
                 # 0,1,2..n-1, n-2..,1 的往返序列
                 self._breath_pos = (self._breath_pos + 1) % max(1, 2 * n - 2)
@@ -607,6 +623,7 @@ class Lamp:
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
         dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home") or dsh_home())
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
+        breath = tk.BooleanVar(value=bool(self.cfg.get("breath", True)))
 
         OK, BAD, WARN = "#2a7", "#c33", "#c80"
 
@@ -811,6 +828,8 @@ class Lamp:
         # ── 最下面 ──
         tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
             anchor="w", padx=14, pady=(12, 0))
+        tk.Checkbutton(dlg, text=t("breath", L), variable=breath).pack(
+            anchor="w", padx=14, pady=(2, 0))
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
@@ -852,7 +871,8 @@ class Lamp:
                 same = False
             self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
                              "dsh_home": "" if same else picked,
-                             "sound": bool(sound.get())})
+                             "sound": bool(sound.get()),
+                             "breath": bool(breath.get())})
             self.url = self.cfg["server"]
             set_dsh_home(self.cfg["dsh_home"])
             try:

@@ -54,6 +54,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "why2": "需要装一个 zstd 解码器才能读取“思考中、调用工具”这类状态。",
         # 其他
         "sound": "任务完成时播放提示音",
+        "breath": "灯光呼吸效果",
         "save": "保存并重连",
         "cancel": "取消",
         "saved_verifying": "已保存，正在验证连接…",
@@ -125,6 +126,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "why1": "Why: DSH stores its detailed log with zstd compression,",
         "why2": "so a decoder is needed to read states like thinking or running a tool.",
         "sound": "Play a sound when a task completes",
+        "breath": "Breathe the light",
         "save": "Save and reconnect",
         "cancel": "Cancel",
         "saved_verifying": "Saved, verifying connection…",
