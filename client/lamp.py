@@ -464,10 +464,10 @@ class Lamp:
         # ── 数据来源 ──
         tk.Label(dlg, text="数据来源", font=("", 10, "bold")).pack(
             anchor="w", padx=14, pady=(14, 4))
-        tk.Radiobutton(dlg, text="本机模式 —— 直接读这台机器上的 DSH 数据（零配置）",
+        tk.Radiobutton(dlg, text="本机模式 —— DSH 装在这台电脑上时选我",
                        variable=mode, value="local",
                        command=lambda: _apply_mode()).pack(anchor="w", padx=24)
-        tk.Radiobutton(dlg, text="局域网模式 —— 连接另一台机器上的状态桥",
+        tk.Radiobutton(dlg, text="局域网模式 —— DSH 装在局域网内其他电脑上时选我",
                        variable=mode, value="lan",
                        command=lambda: _apply_mode()).pack(anchor="w", padx=24)
 
