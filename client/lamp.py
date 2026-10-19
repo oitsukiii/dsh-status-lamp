@@ -211,8 +211,9 @@ LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
 
 # 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
 BREATH_LEVELS = 30     # 亮度档数（越多越平滑；亮度帧惰性生成，不占启动时间）
-BREATH_MIN = 0.60      # 最暗 = 60%
+BREATH_MIN = 0.75      # 最暗 = 75%
 BREATH_STEP_MS = 45    # 每档停留毫秒（30 档 × 45ms ≈ 一个方向 1.35 秒）
+BREATH_HOLD_MS = 1000  # 到最亮后停留多久再往回落
 MARGIN = 8         # 四周留白
 
 # 状态 → 素材文件名
@@ -581,9 +582,16 @@ class Lamp:
                     photo = ImageTk.PhotoImage(im)
                     self._photos[self.state] = photo
                     self.canvas.itemconfigure(self._item, image=photo)
+                    # 到最亮就停一会儿，让"最亮"这个状态有存在感
+                    if self._level == BREATH_LEVELS - 1:
+                        delay = BREATH_HOLD_MS
+                    else:
+                        delay = BREATH_STEP_MS
+                else:
+                    delay = BREATH_STEP_MS
         except Exception:
-            pass
-        self.root.after(BREATH_STEP_MS, self._breath_tick)
+            delay = BREATH_STEP_MS
+        self.root.after(delay, self._breath_tick)
 
     # ---------- 拖拽 ----------
 
