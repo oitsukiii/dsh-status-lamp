@@ -91,7 +91,7 @@ for _cand in (_HERE, os.path.dirname(_HERE)):
 
 from dsh_lamp.backends import (FileBackend, SseBackend, make_backend,  # noqa: E402
                                zstd_available)
-from dsh_lamp.paths import config_file, dsh_home  # noqa: E402
+from dsh_lamp.paths import config_file, dsh_home, set_dsh_home  # noqa: E402
 
 DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
 
@@ -117,8 +117,29 @@ AGENT_PROMPT = f"""请帮我部署一个「DSH 状态灯」的服务端桥。
 DEFAULT_CONFIG = {
     "mode": "local",                       # local | lan
     "server": "http://127.0.0.1:3099/events",
+    "dsh_home": "",                        # 留空 = 默认 ~/.dsh
     "sound": True,
 }
+
+
+def default_home_display() -> str:
+    """把默认 DSH 目录里的真实用户名换成 <用户名> 占位符。
+
+    既让小白看得懂（给出具体形态），又不会在截图上泄漏用户名。
+    Windows:  C:\\Users\\<用户名>\\.dsh
+    macOS:    /Users/<用户名>/.dsh
+    Linux:    /home/<用户名>/.dsh
+    """
+    home = os.path.expanduser("~")
+    real = dsh_home()
+    if not real.startswith(home):
+        return real          # 用户自己指定过目录，就照实显示
+    # 不要用 os.path.dirname —— 它按【当前平台】的分隔符工作，
+    # 在 Linux 上处理 "C:\Users\x" 会返回空串。按字符串里的分隔符判断更稳。
+    sep = "\\" if "\\" in home else "/"
+    parent = home.rsplit(sep, 1)[0]
+    masked = parent + sep + "<用户名>"
+    return masked + real[len(home):]
 
 
 def load_config() -> dict:
@@ -426,50 +447,106 @@ class Lamp:
         self.menu.tk_popup(ev.x_root, ev.y_root)
 
     def open_settings(self) -> None:
-        """设置窗口：选模式、填地址、测连接、保存并重连。"""
+        """设置窗口：选模式后只显示该模式的配置。"""
         dlg = tk.Toplevel(self.root)
         dlg.title("DSH 状态灯 — 设置")
-        dlg.geometry("580x470")
+        dlg.geometry("600x560")
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
         mode = tk.StringVar(value=self.cfg.get("mode", "local"))
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
+        dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home", ""))
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
 
-        tk.Label(dlg, text="数据来源", font=("", 10, "bold")).pack(anchor="w", padx=14, pady=(14, 4))
-        tk.Radiobutton(dlg, text="本机模式 —— 直接读本机的 DSH 数据（零配置）",
-                       variable=mode, value="local", command=lambda: _sync()).pack(anchor="w", padx=24)
-        tk.Radiobutton(dlg, text="局域网模式 —— 连接另一台机器上的桥",
-                       variable=mode, value="lan", command=lambda: _sync()).pack(anchor="w", padx=24)
+        # ── 数据来源 ──
+        tk.Label(dlg, text="数据来源", font=("", 10, "bold")).pack(
+            anchor="w", padx=14, pady=(14, 4))
+        tk.Radiobutton(dlg, text="本机模式 —— 直接读这台机器上的 DSH 数据（零配置）",
+                       variable=mode, value="local",
+                       command=lambda: _apply_mode()).pack(anchor="w", padx=24)
+        tk.Radiobutton(dlg, text="局域网模式 —— 连接另一台机器上的状态桥",
+                       variable=mode, value="lan",
+                       command=lambda: _apply_mode()).pack(anchor="w", padx=24)
 
-        tk.Label(dlg, text="桥地址（仅局域网模式）").pack(anchor="w", padx=14, pady=(10, 2))
-        ent = tk.Entry(dlg, textvariable=server, width=62)
-        ent.pack(padx=24, anchor="w")
+        # 两个模式的配置都挂在同一个容器里，一次只 pack 一个
+        mode_area = tk.Frame(dlg)
+        mode_area.pack(fill="x", padx=0, pady=(8, 0))
 
-        tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(anchor="w", padx=24, pady=(10, 0))
+        # ── 本机模式配置 ──
+        local_box = tk.LabelFrame(mode_area, text=" 本机模式 ")
+        tk.Label(local_box, text="DSH 数据目录（留空 = 默认）").pack(
+            anchor="w", padx=10, pady=(8, 2))
+        row = tk.Frame(local_box)
+        row.pack(anchor="w", padx=12)
+        home_ent = tk.Entry(row, textvariable=dsh_home_var, width=48)
+        home_ent.pack(side="left")
 
-        from dsh_lamp.event_tail import decompressor_kind
+        def _browse() -> None:
+            from tkinter import filedialog
+            picked = filedialog.askdirectory(
+                title="选择 DSH 数据目录（里面有 storages 和 sessions 的那个）",
+                initialdir=dsh_home_var.get() or dsh_home())
+            if picked:
+                dsh_home_var.set(picked)
+
+        tk.Button(row, text="浏览…", command=_browse).pack(side="left", padx=(6, 0))
+        home_hint = tk.Label(local_box, justify="left", wraplength=540, fg="#888",
+                             font=("", 8), text="")
+        home_hint.pack(anchor="w", padx=12, pady=(3, 8))
+
+        # ── 局域网模式配置 ──
+        lan_box = tk.LabelFrame(mode_area, text=" 局域网模式 ")
+        tk.Label(lan_box, text="桥地址").pack(anchor="w", padx=10, pady=(8, 2))
+        ent = tk.Entry(lan_box, textvariable=server, width=58)
+        ent.pack(anchor="w", padx=12)
+
+        guide = tk.LabelFrame(lan_box, text=" 还没有桥？ ")
+        guide.pack(fill="x", padx=12, pady=(8, 8))
+        tk.Label(guide, justify="left", wraplength=500, fg="#555",
+                 text="点下面的按钮复制一段指令，发给你的 DSH，"
+                      "让它配好服务器端软件并把地址回给你。").pack(
+            anchor="w", padx=10, pady=(6, 4))
+
+        def _copy_prompt() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(AGENT_PROMPT)
+            status.configure(text="✓ 已复制，发给你的 DSH 即可", fg="#2a7")
+
+        tk.Button(guide, text="复制配置指令", command=_copy_prompt).pack(
+            anchor="w", padx=10, pady=(0, 4))
+        tk.Label(guide, justify="left", wraplength=500, fg="#888", font=("", 8),
+                 text=f"项目地址：{REPO_URL}").pack(anchor="w", padx=10, pady=(0, 6))
+
+        # ── 通用选项 ──
+        tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(
+            anchor="w", padx=14, pady=(10, 0))
+
+        # 解码器状态
         dep = tk.Frame(dlg)
-        dep.pack(anchor="w", fill="x", padx=24, pady=(8, 0))
-        dep_label = tk.Label(dep, justify="left", wraplength=430, font=("", 8))
+        dep.pack(anchor="w", fill="x", padx=14, pady=(8, 0))
+        dep_label = tk.Label(dep, justify="left", wraplength=420, font=("", 8))
         dep_label.pack(side="left", anchor="w")
+        why_label = tk.Label(dlg, justify="left", wraplength=560, fg="#999", font=("", 8),
+            text="为什么要装：DSH 的详细日志是 zstd 压缩存的（37 MB 压缩 / 128 MB 解压），\n"
+                 "装个解码器才能读出「思考中 / 调工具」这类细粒度状态。\n"
+                 "装一次即可，约 1 MB，用当前运行灯的 Python 安装。")
 
         def _refresh_dep() -> None:
-            """重新检测，并决定要不要显示安装按钮。"""
+            from dsh_lamp.event_tail import decompressor_kind
             kind = decompressor_kind()
             if kind == "none":
-                dep_label.configure(
-                    fg="#c80",
-                    text="⚠️ 没有 zstd 解码器：只显示「忙/闲」，"
-                         "看不到「思考中/调工具」")
+                dep_label.configure(fg="#c80",
+                    text="⚠️ 没有 zstd 解码器：只能判断「忙/闲」，"
+                         "分不清「在思考」还是「在调工具」")
                 install_btn.pack(side="right", padx=(8, 0))
+                why_label.pack(anchor="w", padx=14, pady=(4, 0))
             else:
                 dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
                 install_btn.pack_forget()
+                why_label.pack_forget()
 
         def _one_click_install() -> None:
-            """一键装 pyzstd —— 用当前解释器的 pip，不弹 UAC、不碰系统 Python。"""
             install_btn.configure(state="disabled", text="安装中…")
             dep_label.configure(fg="#888", text="正在安装 pyzstd…")
 
@@ -484,7 +561,7 @@ class Lamp:
                         tail = (proc.stderr or proc.stdout or "").strip().splitlines()
                         msg = tail[-1][:160] if tail else f"退出码 {proc.returncode}"
                 except Exception as exc:
-                    msg = f"{exc.__class__.__name__}"
+                    msg = exc.__class__.__name__
                 self.root.after(0, lambda: done(ok, msg))
 
             def done(ok: bool, msg: str) -> None:
@@ -499,24 +576,37 @@ class Lamp:
             threading.Thread(target=work, daemon=True).start()
 
         install_btn = tk.Button(dep, text="一键安装解码器", command=_one_click_install)
-        _refresh_dep()
+
         status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
-        status.pack(anchor="w", padx=24, pady=(6, 0))
+        status.pack(anchor="w", padx=14, pady=(6, 0))
 
-        def _sync() -> None:
-            ent.configure(state="normal" if mode.get() == "lan" else "disabled")
+        # ── 模式切换 ──
+        def _apply_mode() -> None:
+            local = mode.get() == "local"
+            if local:
+                lan_box.pack_forget()
+                local_box.pack(fill="x", padx=14, pady=(6, 0))
+                home_hint.configure(
+                    text=f"默认是 {default_home_display()}，"
+                         f"里面应该有 storages/ 和 sessions/ 两个子目录。")
+            else:
+                local_box.pack_forget()
+                lan_box.pack(fill="x", padx=14, pady=(6, 0))
 
+        # ── 按钮 ──
         def _test() -> None:
             if mode.get() == "local":
                 try:
                     from dsh_lamp.state import read_state
+                    set_dsh_home(dsh_home_var.get().strip())
                     st = read_state(None)
-                    status.configure(text=f"✓ 读到了：{st.get('state')}（轮次 {st.get('turn')}）", fg="#2a7")
+                    status.configure(
+                        text=f"✓ 读到了：{st.get('state')}（轮次 {st.get('turn')}）", fg="#2a7")
                 except Exception as e:
-                    status.configure(text=f"✗ 读取失败：{e}", fg="#c33")
+                    # 只报异常类型，不把完整路径打到界面上（截图会泄漏用户名）
+                    status.configure(text=f"✗ 读取失败：{e.__class__.__name__}", fg="#c33")
                 return
-            url = server.get().strip()
-            base = url.rsplit("/", 1)[0]
+            base = server.get().strip().rsplit("/", 1)[0]
             try:
                 with urllib.request.urlopen(base + "/state", timeout=4) as r:
                     data = json.loads(r.read().decode("utf-8"))
@@ -526,45 +616,27 @@ class Lamp:
 
         def _save() -> None:
             self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
+                             "dsh_home": dsh_home_var.get().strip(),
                              "sound": bool(sound.get())})
             self.url = self.cfg["server"]
+            set_dsh_home(self.cfg["dsh_home"])
             try:
                 save_config(self.cfg)
             except OSError as e:
                 status.configure(text=f"✗ 保存失败：{e}", fg="#c33")
                 return
             self._n_push = 0
-            self._start_backend()          # 立刻用新配置重连
+            self._start_backend()
             status.configure(text="✓ 已保存并重连", fg="#2a7")
-
-        # ── 没有桥时：让用户自己的 DSH 去部署 ──
-        guide = tk.LabelFrame(dlg, text="  局域网模式下没有桥？  ")
-        guide.pack(fill="x", padx=14, pady=(10, 4))
-
-        tk.Label(guide, justify="left", wraplength=520, fg="#555",
-                 text="点下面的按钮复制一段指令，发给你的 DSH，"
-                      "让它配好服务器端软件并把桥地址回给你。").pack(
-            anchor="w", padx=10, pady=(6, 4))
-
-        def _copy_prompt() -> None:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(AGENT_PROMPT)
-            status.configure(text="✓ 已复制，发给你的 DSH 即可", fg="#2a7")
-
-        tk.Button(guide, text="复制配置指令", command=_copy_prompt).pack(
-            anchor="w", padx=10, pady=(0, 8))
-
-        tk.Label(guide, justify="left", wraplength=520, fg="#888",
-                 font=("", 8),
-                 text=f"（项目地址：{REPO_URL}）").pack(
-            anchor="w", padx=10, pady=(0, 6))
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
         tk.Button(bar, text="测试连接", command=_test).pack(side="left")
         tk.Button(bar, text="保存并重连", command=_save).pack(side="right")
         tk.Button(bar, text="取消", command=dlg.destroy).pack(side="right", padx=8)
-        _sync()
+
+        _apply_mode()
+        _refresh_dep()
 
     def _reset_pos(self) -> None:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
@@ -641,6 +713,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = load_config()
+    set_dsh_home(cfg.get("dsh_home"))
     if args.url:
         cfg["mode"], cfg["server"] = "lan", args.url
     if args.local:
