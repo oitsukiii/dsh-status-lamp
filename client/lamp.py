@@ -368,6 +368,26 @@ class Lamp:
 
     # ---------- 素材 ----------
 
+    def _sprite_thumb(self, name: str, height: int):
+        """把某张状态图做成缩略图，合成到白底上（Tk 对 RGBA 支持不好）。"""
+        if not _HAS_PIL:
+            return None
+        path = os.path.join(ASSET_DIR, f"{name}.png")
+        if not os.path.isfile(path):
+            return None
+        try:
+            im = Image.open(path).convert("RGBA")
+            ratio = height / im.size[1]
+            size = (max(1, int(im.size[0] * ratio)), height)
+            im = im.resize(size, Image.LANCZOS)
+            alpha = im.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+            im.putalpha(alpha)
+            bg = Image.new("RGB", size, "white")
+            bg.paste(im, (0, 0), im)
+            return ImageTk.PhotoImage(bg)
+        except Exception:
+            return None
+
     def px(self, n: int) -> int:
         """把 96 DPI 下的像素值换算到当前缩放。"""
         return max(1, int(round(n * getattr(self, "dpi_scale", 1.0))))
@@ -809,34 +829,52 @@ class Lamp:
             """灯语说明 —— 四色各是什么意思。"""
             d = tk.Toplevel(dlg)
             d.title(t("lang_title", L))
-            d.geometry(f"{self.px(560)}x{self.px(470)}")
+            # 不定死尺寸：先给个宽度，高度交给内容自己撑开
+            d.geometry(f"{self.px(600)}x1")
             d.attributes("-topmost", True)
             d.resizable(False, False)
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
                 anchor="w", padx=18, pady=(16, 10))
 
             rows = [
-                ("#e74c3c", t("lang_red", L),    t("lang_red_h", L),
+                ("attention", "#e74c3c", t("lang_red", L),    t("lang_red_h", L),
                  [t("lang_red_1", L), t("lang_red_2", L)]),
-                ("#f1c40f", t("lang_yellow", L), t("lang_yellow_h", L),
+                ("working",   "#f1c40f", t("lang_yellow", L), t("lang_yellow_h", L),
                  [t("lang_yellow_1", L), t("lang_yellow_2", L), t("lang_yellow_3", L)]),
-                ("#1abc9c", t("lang_green", L),  t("lang_green_h", L),
+                ("done",      "#1abc9c", t("lang_green", L),  t("lang_green_h", L),
                  [t("lang_green_1", L), t("lang_green_2", L)]),
-                ("#9a9a94", t("lang_off", L),    t("lang_off_h", L),
+                ("idle",      "#9a9a94", t("lang_off", L),    t("lang_off_h", L),
                  [t("lang_off_1", L), t("lang_off_2", L)]),
             ]
-            for color, label, head, details in rows:
+            # 缩略图要保留引用，否则会被 GC 回收成空白
+            d._thumbs = []
+            for sprite, color, label, head, details in rows:
                 row = tk.Frame(d)
-                row.pack(anchor="w", fill="x", padx=18, pady=(4, 8))
-                tk.Label(row, text="●", fg=color, font=("", 20)).pack(
-                    side="left", anchor="n", padx=(0, 10))
+                row.pack(anchor="w", fill="x", padx=18, pady=(6, 10))
+
+                # 左侧：灯的实际样子（合成到白色背景上）
+                thumb = self._sprite_thumb(sprite, self.px(68))
+                if thumb is not None:
+                    tk.Label(row, image=thumb, bg="white",
+                             borderwidth=1, relief="solid").pack(
+                        side="left", anchor="n", padx=(0, 14))
+                    d._thumbs.append(thumb)
+
                 col = tk.Frame(row)
-                col.pack(side="left", anchor="w")
-                tk.Label(col, text=f"{label} · {head}", font=("", 10, "bold")).pack(anchor="w")
+                col.pack(side="left", anchor="n", fill="x", expand=True)
+                head_row = tk.Frame(col)
+                head_row.pack(anchor="w")
+                tk.Label(head_row, text="●", fg=color, font=("", 13)).pack(side="left")
+                tk.Label(head_row, text=f" {label} · {head}",
+                         font=("", 10, "bold")).pack(side="left")
                 for line in details:
                     tk.Label(col, text=f"· {line}", fg="#555", font=("", 9)).pack(anchor="w")
             tk.Button(d, text=t("close", L), command=d.destroy).pack(
                 side="bottom", pady=14)
+
+            # 让窗口收到刚好包住内容的高度（不写死，否则不同 DPI / 字体下会留大片空白）
+            d.update_idletasks()
+            d.geometry(f"{self.px(600)}x{d.winfo_reqheight()}")
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
