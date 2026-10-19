@@ -22,7 +22,7 @@ from PIL import Image
 
 THRESHOLD = 128     # alpha 大于它算不透明
 WINDOW = 20         # 局部中位数的半窗口（行）
-TOLERANCE = 2       # 允许的正常波动（px）
+TOLERANCE = 0       # 不留余量：主体的直边行边界正好等于中位数
 
 
 def trim_tabs(im: Image.Image) -> tuple[Image.Image, int]:
