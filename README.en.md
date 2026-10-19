@@ -18,6 +18,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 - [3. Getting started](#3-getting-started)
   - [3.1 The lamp](#31-the-lamp-desktop-widget)
   - [3.2 The DSH plugin](#32-the-dsh-plugin-bridge)
+  - [3.3 Point the lamp at the bridge](#33-point-the-lamp-at-the-bridge)
 - [4. Technical notes](#4-technical-notes)
   - [4.1 How the state is derived](#41-how-the-state-is-derived)
   - [4.2 On read receipts](#42-on-read-receipts----can-the-green-wait-until-i-have-read-the-messages)
@@ -98,8 +99,6 @@ pip install pillow
 python client/lamp.py
 ```
 
-Right-click the lamp to open settings.
-
 ### 3.2 The DSH plugin (bridge)
 
 Two ways to install it; pick one. **The agent route is recommended** -- it edits the
@@ -124,12 +123,17 @@ Then restart DSH.
 
 ![The bridge in the plugin list](docs/images/plugin-list-en.png)
 
-Finally, point the lamp's address at the machine holding the bridge:
+### 3.3 Point the lamp at the bridge
+
+Right-click the lamp, choose **Settings…**, and set **Plugin address** to the machine
+holding the bridge:
 
 ```
 Lamp and DSH on one machine   ->  http://127.0.0.1:3099/events
 Lamp on another machine       ->  http://<that machine's LAN address>:3099/events
 ```
+
+Press **Test connect** to confirm it answers, then **Save and reconnect**.
 
 ---
 
