@@ -388,6 +388,25 @@ class Lamp:
         except Exception:
             return None
 
+    @staticmethod
+    def _center(win) -> None:
+        """把窗口挪到屏幕中间（略偏上，视觉更舒服）。
+
+        对话框默认出现在左上角。居中到父窗口不行 —— 灯本身只有一百多像素宽，
+        对话框比它大得多，会被推到屏幕外。
+        """
+        try:
+            win.update_idletasks()
+            w = win.winfo_reqwidth()
+            h = win.winfo_reqheight()
+            sw = win.winfo_screenwidth()
+            sh = win.winfo_screenheight()
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 3)
+            win.geometry(f"+{x}+{y}")
+        except Exception:
+            pass
+
     def px(self, n: int) -> int:
         """把 96 DPI 下的像素值换算到当前缩放。"""
         return max(1, int(round(n * getattr(self, "dpi_scale", 1.0))))
@@ -887,6 +906,7 @@ class Lamp:
             # 宽高都按内容收（写死任何一个都会在别的 DPI / 字体 / 语言下留空白）
             d.update_idletasks()
             d.geometry(f"{d.winfo_reqwidth()}x{d.winfo_reqheight()}")
+            self._center(d)
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
@@ -898,6 +918,7 @@ class Lamp:
         _apply_mode()
         _refresh_dep()
         dlg.after_idle(_fit_height)
+        dlg.after(20, lambda: self._center(dlg))
 
     def _reset_pos(self) -> None:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
