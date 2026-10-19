@@ -56,6 +56,10 @@ On another machine           →  http://<DSH host LAN address>:3099/events
 
 Both expose the same endpoints, so the lamp's configuration does not change.
 
+The settings window -- the whole configuration is one address:
+
+![Settings](docs/images/settings-en.png)
+
 ## Getting started
 
 ### Download (Windows)
