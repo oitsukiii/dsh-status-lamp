@@ -75,8 +75,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "bridge_remote_url": "http://<DSH 所在设备的局域网 IP>:3099/events",
         "bridge_manual_title": "如何获得这个地址？（手动方式）",
         "bridge_manual": "【手动配置】点击下面的按钮复制本项目地址 → 到 DSH → 插件 → 添加插件 → 粘贴本项目地址 → 安装。\n"
-                         "重启 DSH 后，在上面填写：\n"
-                         "http://<DSH 所在设备的局域网 IP>:3099/events",
+                         "重启 DSH 后，在上面填写：",
+        "bridge_manual_url": "http://<DSH 所在设备的局域网 IP>:3099/events",
         "bridge_manual_btn": "本项目地址",
         "bridge_auto_title": "如何获得 <DSH 所在设备的局域网 IP> ？",
         "bridge_auto": "【让 agent 代劳，推荐】点击下面的按钮复制提示词 → 发给你的 dsh → agent 会给你一个地址。\n"
@@ -177,8 +177,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "bridge_remote_url": "http://<DSH host LAN IP>:3099/events",
         "bridge_manual_title": "How do I get it? (by hand)",
         "bridge_manual": "[By hand] Press the button below to copy this project's address, then in DSH: Plugins -> Add plugin -> paste -> install.\n"
-                         "After restarting DSH, enter:\n"
-                         "http://<DSH host LAN IP>:3099/events",
+                         "After restarting DSH, enter:",
+        "bridge_manual_url": "http://<DSH host LAN IP>:3099/events",
         "bridge_manual_btn": "Project address",
         "bridge_auto_title": "How do I get the <DSH host LAN IP>?",
         "bridge_auto": "[Let the agent do it -- recommended] Press the button below to copy a prompt, send it to your dsh, and the agent replies with an address.\n"

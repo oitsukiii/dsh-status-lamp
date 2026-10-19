@@ -857,7 +857,9 @@ class Lamp:
 
         # 手动配置
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
-                 text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(0, 4))
+                 text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(0, 0))
+        tk.Label(box, text=t("bridge_manual_url", L), font=("Consolas", 9)).pack(
+            anchor="w", padx=26, pady=(2, 6))
 
         def _copy_addr() -> None:
             self.root.clipboard_clear()
