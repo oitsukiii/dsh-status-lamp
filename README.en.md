@@ -4,7 +4,7 @@ A small desktop widget that tells you at a glance what DSH is doing: reasoning, 
 
 No window switching, no log tailing. A glance out of the corner of your eye.
 
-> **How this was built**: driven end to end by **DSH** (DeepSeek Harness) running **DeepSeek V4.1 Flash**, as a vibecoding exercise -- describing what was wanted, running it, noticing what was wrong, saying so. The sprites were generated with ComfyUI and then trimmed by the scripts under `tools/`.
+> **How this was built**: driven end to end by **DSH** (DeepSeek Harness) running **DeepSeek V4.1 Flash**, as a vibecoding exercise. The sprites were generated with ComfyUI and then trimmed by the scripts under `tools/`.
 
 [中文](README.md) | **English**
 
