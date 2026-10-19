@@ -1,7 +1,7 @@
 {
   "_comment": "把 bridge.url 改成你 NAS 的地址；端口要和 state_bridge.py 一致",
   "bridge": {
-    "url": "http://192.168.2.102:3099/state",
+    "server": "http://192.168.1.50:3099/events",
     "poll_ms": 700
   }
 }

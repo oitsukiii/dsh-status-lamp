@@ -3,7 +3,7 @@
 
 纯标准库（tkinter + urllib），Windows 上双击即可运行，不需要 pip install。
 
-它从「状态桥」拉取状态（默认 http://192.168.2.102:3099/state），
+它从「状态桥」拉取状态（默认 http://127.0.0.1:3099/events），
 因为 DSH 可能跑在另一台机器（比如 NAS）上。
 
 状态与颜色
@@ -26,7 +26,7 @@
 用法
 ----
     pythonw client/lamp.py                 # 无控制台窗口
-    python  client/lamp.py --url http://192.168.2.102:3099/state
+    python  client/lamp.py --url http://192.168.1.50:3099/events
 """
 
 from __future__ import annotations
@@ -620,17 +620,18 @@ class Lamp:
     # ---------- 菜单 ----------
 
     def _build_menu(self) -> None:
+        L = self.lang
         self.menu = tk.Menu(self.root, tearoff=0)
-        self.menu.add_command(label="立刻刷新", command=self.poll)
-        self.menu.add_command(label="回到右下角", command=self._reset_pos)
+        self.menu.add_command(label=t("menu_refresh", L), command=self.poll)
+        self.menu.add_command(label=t("menu_reset", L), command=self._reset_pos)
         self.menu.add_separator()
-        self.menu.add_command(label="设置…", command=self.open_settings)
+        self.menu.add_command(label=t("menu_settings", L), command=self.open_settings)
         self.menu.add_separator()
         self.var_top = tk.BooleanVar(value=True)
-        self.menu.add_checkbutton(label="始终置顶", variable=self.var_top,
+        self.menu.add_checkbutton(label=t("menu_topmost", L), variable=self.var_top,
                                   command=self._toggle_topmost)
         self.menu.add_separator()
-        self.menu.add_command(label="退出", command=self.root.destroy)
+        self.menu.add_command(label=t("menu_quit", L), command=self.root.destroy)
 
     def _rebuild_menu(self) -> None:
         """界面语言变了，菜单文字要跟着换 —— 直接重建一遍。"""
