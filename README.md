@@ -8,6 +8,14 @@
 
 **中文** | [English](README.en.md)
 
+## 目录
+
+- [1. 效果预览](#1-效果预览)
+- [2. 配置细节](#2-配置细节)
+- [3. 快速开始](#3-快速开始)
+- [4. 一些技术细节](#4-一些技术细节)
+- [5. 许可](#5-许可)
+
 ---
 
 ## 1. 效果预览
@@ -68,19 +76,15 @@
 
 ## 3. 快速开始
 
-### 直接下载（Windows）
+装两样东西：**桌面上的状态灯**，以及**DSH 那台机器上的桥接插件**。
+
+### 3.1 状态灯（桌面小挂件）
+
+**Windows 直接下载**（推荐）：
 
 [**下载 DSH-Lamp.exe**](https://github.com/oitsukiii/dsh-status-lamp/releases/latest) —— 不需要装 Python，双击就能跑。
 
-### 从源码跑
-
-Python 3.9+，另外：
-
-- **Pillow** —— 显示图片素材（没有就退回画一个圆点）
-- **zstd 解码器** —— 只有用 Python 桥时才需要；插件版不需要
-  - Python 3.14+ 自带
-  - 否则 `pip install pyzstd`
-  - 设置窗口里有一键安装按钮（仅 Python 桥模式下出现）
+**从源码跑**需要 Python 3.9+ 和 Pillow：
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -90,6 +94,35 @@ python client/lamp.py
 ```
 
 启动后右键灯打开设置。
+
+### 3.2 DSH 插件（桥接器）
+
+装桥有两种方式，选一种。
+
+**方式 A · 在 DSH 界面里装**（推荐）
+
+在 DSH 的「插件」页添加：
+
+```
+github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
+```
+
+装好重启 DSH。
+
+**方式 B · 让 agent 代劳**
+
+把设置窗口里「复制提示词」按钮复制的那段发给 DSH 那台机器上的 agent，它会装好并把地址告诉你。
+
+**方式 C · Python 桥**（不想装插件时用）
+
+见 [`docs/python-bridge.md`](docs/python-bridge.md)。这条要多装 Python 和 zstd 解码器，还得自己守住进程，所以排在最后。
+
+装好之后，把灯设置里的地址填成桥所在的那台机器：
+
+```
+灯和 DSH 同一台机器   →  http://127.0.0.1:3099/events
+灯在另一台机器        →  http://<那台机器的局域网 IP>:3099/events
+```
 
 ---
 

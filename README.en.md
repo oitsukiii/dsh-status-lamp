@@ -8,6 +8,14 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 [中文](README.md) | **English**
 
+## Contents
+
+- [1. Preview](#1-preview)
+- [2. Configuration](#2-configuration)
+- [3. Getting started](#3-getting-started)
+- [4. Technical notes](#4-technical-notes)
+- [5. License](#5-license)
+
 ---
 
 ## 1. Preview
@@ -68,19 +76,15 @@ Both expose the same endpoints, so the lamp's configuration does not change.
 
 ## 3. Getting started
 
-### Download (Windows)
+Two things to install: **the lamp on your desktop**, and **the bridge plugin on the machine running DSH**.
+
+### 3.1 The lamp (desktop widget)
+
+**Windows, download** (recommended):
 
 [**Download DSH-Lamp.exe**](https://github.com/oitsukiii/dsh-status-lamp/releases/latest) — no Python needed, just run it.
 
-### From source
-
-Python 3.9+, plus:
-
-- **Pillow** — for the sprites (without it the lamp falls back to a drawn circle)
-- **A zstd decoder** — only for the Python bridge; the plugin does not need one
-  - Built in on Python 3.14+
-  - Otherwise `pip install pyzstd`
-  - There is a one-click install button in settings (visible in Python bridge mode only)
+**From source** needs Python 3.9+ and Pillow:
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -90,6 +94,35 @@ python client/lamp.py
 ```
 
 Right-click the lamp to open settings.
+
+### 3.2 The DSH plugin (bridge)
+
+Three ways to install the bridge; pick one.
+
+**A · Through the DSH interface** (recommended)
+
+Add this in DSH's Plugins page:
+
+```
+github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
+```
+
+Then restart DSH.
+
+**B · Let the agent do it**
+
+Send the text the "Copy prompt" button puts on your clipboard to the agent on the DSH machine. It installs the plugin and replies with the address.
+
+**C · Python bridge** (when you would rather not install a plugin)
+
+See [`docs/python-bridge.md`](docs/python-bridge.md). This route needs Python and a zstd decoder as well, and you have to keep the process alive, which is why it comes last.
+
+Either way, point the lamp's address at the machine holding the bridge:
+
+```
+Lamp and DSH on one machine   ->  http://127.0.0.1:3099/events
+Lamp on another machine       ->  http://<that machine's LAN address>:3099/events
+```
 
 ---
 
