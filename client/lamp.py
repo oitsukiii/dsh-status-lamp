@@ -394,6 +394,16 @@ class Lamp:
             ratio = target_h / im.size[1]
             size = (max(1, int(im.size[0] * ratio)), target_h)
             im = im.resize(size, Image.LANCZOS)
+
+            # ⚠️ alpha 二值化 —— 必须做，否则灯周围会有一圈洋红光边。
+            #
+            # tkinter 的 -transparentcolor 只抠【精确等于】BG_KEY 的像素。
+            # 素材边缘的抗锯齿半透明像素合成到洋红底上会得到 #ff88ff 之类，
+            # 不匹配色键 ⇒ 抠不掉 ⇒ 视觉上就是一圈粉红描边。
+            # 像素风本来就是硬边，二值化不影响观感。
+            alpha = im.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
+            im.putalpha(alpha)
+
             # 合成到色键底色上（RGBA 直接给 PhotoImage 会丢掉 alpha）
             bg = Image.new("RGB", size, BG_KEY)
             bg.paste(im, (0, 0), im)
