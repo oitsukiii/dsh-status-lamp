@@ -20,7 +20,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
   - [3.2 The DSH plugin](#32-the-dsh-plugin-bridge)
 - [4. Technical notes](#4-technical-notes)
   - [4.1 How the state is derived](#41-how-the-state-is-derived)
-  - [4.2 On read receipts](#42-on-read-receipts)
+  - [4.2 On read receipts](#42-on-read-receipts----can-the-green-wait-until-i-have-read-the-messages)
   - [4.3 Behaviour](#43-behaviour)
 - [5. License](#5-license)
 - [6. Changelog](#6-changelog)
@@ -173,9 +173,11 @@ frame header and decompressing only the last few hundred kilobytes.
 needed a zstd decoder; and the snapshot and the log were each chosen by newest mtime,
 so in principle they could belong to different sessions.
 
-### 4.2 On read receipts
+### 4.2 On read receipts -- can the green wait until I have read the messages?
 
-**Not possible. DSH has no such concept.**
+**No. DSH has no notion of "read", so the lamp cannot know whether you looked.**
+
+The green starts its three-minute timer when the turn ends, regardless.
 
 What was checked:
 
@@ -195,6 +197,8 @@ the time of the last user/message   -- that is speaking, not reading
 the time of the last event          -- that is DSH working, not the user
 the client being online             -- a background tab counts as online
 ```
+
+**Making the green depend on reading would mean changing the DSH web client**: report when a message enters the viewport, add an event type, and have the plugin subscribe to it. That is a change to DSH itself, not to this lamp.
 
 **So this lamp answers "what is DSH doing", not "have you read it".**
 
