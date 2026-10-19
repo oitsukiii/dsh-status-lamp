@@ -160,6 +160,25 @@ DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
 # 项目地址 —— 发布到 GitHub 后把这里换成真实地址，复制出去的提示词就会跟着变
 REPO_URL = "https://github.com/<你的用户名>/dsh-status-lamp"
 
+# 用户在 DSH 插件页要粘贴的东西
+PROJECT_ADDR = "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp"
+
+# 给 agent 的提示词 —— 让它在 DSH 那台机器上把插件装好并回报地址
+AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接插件，并把地址告诉我。
+
+项目地址：{PROJECT_ADDR}
+
+步骤：
+1. 在 DSH 的插件页添加上面这个地址，或者按仓库里 AGENT.md 的说明操作
+2. 装好后需要重启 DSH（这会中断当前会话，动手前请先征得我同意）
+3. 重启后确认 http://127.0.0.1:3099/state 能返回 JSON
+4. 告诉我一个可以填进状态灯的地址：
+   - 如果状态灯就跑在这台机器上：http://127.0.0.1:3099/events
+   - 如果在另一台机器：http://<这台机器的局域网 IP>:3099/events
+
+注意：不要把 3099 暴露到公网，这个端口没有认证。
+"""
+
 # 「复制给 agent」的内容：一段可以直接发给 DSH 的提示词
 
 
@@ -234,6 +253,17 @@ BREATH_LEVELS = 30     # 亮度档数（越多越平滑；亮度帧惰性生成�
 BREATH_MIN = 0.60      # 最暗 = 60%
 BREATH_STEP_MS = 45    # 每档停留毫秒（30 档 × 45ms ≈ 一个方向 1.35 秒）
 BREATH_HOLD_MS = 1000  # 到最亮后停留多久再往回落
+
+# 每张状态图里【点亮的那颗灯泡】的圆心（素材原生 140x320 坐标）；
+# None 表示这张图没有亮着的灯。呼吸只调这颗灯泡，不动灯罩。
+LIT_BULB = {
+    "attention.png": (70, 59),     # 顶灯
+    "working.png":   (70, 141),    # 中灯
+    "done.png":      (70, 222),    # 底灯
+    "idle.png":      None,
+    "offline.png":   None,
+}
+BULB_R = 33
 MARGIN = 8         # 四周留白
 
 # 状态 → 素材文件名
@@ -482,7 +512,11 @@ class Lamp:
         self._draw()
 
     def _frames_for(self, fn):
-        """取某个状态的亮度帧列表；第一次用到才生成，之后缓存。"""
+        """取某个状态的亮度帧列表；第一次用到才生成，之后缓存。
+
+        ⚠️ 只调【点亮那颗灯泡】的亮度，绝不动灯罩。
+        整张图一起调暗的话，深灰外壳会跟着闪，看起来像整个挂件在抖。
+        """
         if not _HAS_PIL or not self._assets:
             return None
         cache = self._frame_cache
@@ -492,26 +526,38 @@ class Lamp:
         if src is None:
             return None
 
+        import numpy as _np
         from PIL import ImageEnhance
+
         size = src.size
+        centre = LIT_BULB.get(fn)
+        mask_img = None
+        if centre is not None:
+            sc = size[1] / 320.0          # 素材原生 320 高，换算到当前显示高度
+            cx, cy, r = centre[0] * sc, centre[1] * sc, BULB_R * sc
+            yy, xx = _np.mgrid[0:size[1], 0:size[0]]
+            mask = ((yy - cy) ** 2 + (xx - cx) ** 2) <= r ** 2
+            mask_img = Image.fromarray((mask * 255).astype(_np.uint8))
+
         frames = []
         for lv in range(BREATH_LEVELS):
             factor = BREATH_MIN + (1.0 - BREATH_MIN) * (lv / (BREATH_LEVELS - 1))
-            if factor >= 1.0:
+            if factor >= 1.0 or mask_img is None:
                 dim = src
             else:
-                dim = ImageEnhance.Brightness(src).enhance(factor)
-                dim.putalpha(src.getchannel("A"))    # 亮度不能改动 alpha
+                # 先整图调暗，再把「灯泡以外」的部分贴回原样 —— 等价于只调灯泡
+                darker = ImageEnhance.Brightness(src).enhance(factor)
+                dim = src.copy()
+                dim.paste(darker, (0, 0), mask_img)
+                dim.putalpha(src.getchannel("A"))
             bg = Image.new("RGB", size, BG_KEY)
             bg.paste(dim, (0, 0), dim)
             frames.append(bg)
 
-        # 只留最近两个状态：5 个全留会白占十几 MB
         if len(cache) >= 2:
             cache.pop(next(iter(cache)))
         cache[fn] = frames
         return frames
-
 
     def _window_size(self) -> tuple:
         """窗口尺寸 = 素材尺寸 + 留白。"""
@@ -730,26 +776,28 @@ class Lamp:
 
         lang_cb.bind("<<ComboboxSelected>>", _on_lang)
 
-        # ── 桥地址 ──
+        # ── 桥接插件地址 ──
         box = tk.LabelFrame(dlg, text=t("frame_bridge", L))
         box.pack(fill="x", padx=14, pady=(12, 0))
-        tk.Label(box, text=t("bridge_addr", L)).pack(anchor="w", padx=10, pady=(8, 2))
+
+        tk.Label(box, text=t("bridge_intro_title", L), font=("", 10, "bold")).pack(
+            anchor="w", padx=10, pady=(8, 0))
+        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+                 text=t("bridge_intro", L)).pack(anchor="w", padx=12, pady=(2, 6))
+
         ent = tk.Entry(box, textvariable=server, width=52)
         ent.pack(anchor="w", padx=12)
-        tk.Label(box, justify="left", wraplength=520, fg="#888", font=("", 9),
-                 text=t("bridge_hint", L)).pack(anchor="w", padx=12, pady=(4, 6))
-
         test_row = tk.Frame(box)
-        test_row.pack(anchor="w", padx=12, pady=(0, 8))
+        test_row.pack(anchor="w", padx=12, pady=(6, 8))
         conn_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
         read_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
 
-        def _lan_base() -> str:
+        def _base() -> str:
             return server.get().strip().rsplit("/", 1)[0]
 
         def _test_conn() -> None:
             try:
-                with urllib.request.urlopen(_lan_base() + "/state", timeout=4) as r:
+                with urllib.request.urlopen(_base() + "/state", timeout=4) as r:
                     r.read(1)
                 conn_result.configure(text=t("conn_ok", L), fg=OK)
             except Exception:
@@ -757,7 +805,7 @@ class Lamp:
 
         def _test_read() -> None:
             try:
-                with urllib.request.urlopen(_lan_base() + "/state", timeout=4) as r:
+                with urllib.request.urlopen(_base() + "/state", timeout=4) as r:
                     data = json.loads(r.read().decode("utf-8"))
                 if data.get("state"):
                     read_result.configure(text=t("read_ok", L), fg=OK)
@@ -770,6 +818,36 @@ class Lamp:
         conn_result.pack(side="left", padx=(8, 14))
         tk.Button(test_row, text=t("test_read", L), command=_test_read).pack(side="left")
         read_result.pack(side="left", padx=(8, 0))
+
+        # 手动方式
+        tk.Label(box, text=t("bridge_manual_title", L), font=("", 10, "bold")).pack(
+            anchor="w", padx=10, pady=(10, 0))
+        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+                 text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(2, 4))
+
+        def _copy_addr() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(PROJECT_ADDR)
+            status.configure(text=t("copied_addr", L), fg=OK)
+
+        tk.Button(box, text=t("bridge_manual_btn", L), command=_copy_addr).pack(
+            anchor="w", padx=12, pady=(0, 8))
+
+        # 让 agent 代劳
+        tk.Label(box, text=t("bridge_auto_title", L), font=("", 10, "bold")).pack(
+            anchor="w", padx=10, pady=(6, 0))
+        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+                 text=t("bridge_auto", L)).pack(anchor="w", padx=12, pady=(2, 4))
+
+        def _copy_prompt() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(AGENT_PROMPT.format(PROJECT_ADDR=PROJECT_ADDR))
+            status.configure(text=t("copied_prompt", L), fg=OK)
+
+        tk.Button(box, text=t("bridge_auto_btn", L), command=_copy_prompt).pack(
+            anchor="w", padx=12, pady=(0, 10))
+
+        # 状态label 要在两个按钮的回调之前定义 —— 挪到前面去了
 
         # ── 开关 ──
         tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
