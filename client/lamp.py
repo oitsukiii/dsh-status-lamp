@@ -731,6 +731,15 @@ class Lamp:
         self.menu.add_command(label=t("menu_settings", L), command=self.open_settings)
         self.menu.add_command(label=t("menu_quit", L), command=self.root.destroy)
 
+    def _rebuild_menu(self) -> None:
+        """界面语言变了，菜单文字要跟着换 —— 直接重建一遍。"""
+        try:
+            self.menu.destroy()
+        except Exception:
+            pass
+        self.menu = tk.Menu(self.root, tearoff=0)
+        self._build_menu()
+
     def _on_menu(self, ev) -> None:
         self.menu.tk_popup(ev.x_root, ev.y_root)
 
