@@ -798,17 +798,13 @@ class Lamp:
         box = tk.LabelFrame(dlg, text=t("frame_bridge", L))
         box.pack(fill="x", padx=14, pady=(12, 0))
 
-        tk.Label(box, text=t("bridge_intro_title", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=10, pady=(8, 0))
-        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
-                 text=t("bridge_intro", L)).pack(anchor="w", padx=12, pady=(2, 6))
-
+        # 地址 + 测试（放最上面）
         ent = tk.Entry(box, textvariable=server, width=52)
-        ent.pack(anchor="w", padx=12)
+        ent.pack(anchor="w", padx=12, pady=(10, 4))
+
         test_row = tk.Frame(box)
-        test_row.pack(anchor="w", padx=12, pady=(6, 8))
-        conn_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
-        read_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
+        test_row.pack(anchor="w", padx=12, pady=(0, 8))
+        conn_result = tk.Label(test_row, text="", font=("", 9), width=10, anchor="w")
 
         def _base() -> str:
             return server.get().strip().rsplit("/", 1)[0]
@@ -821,39 +817,18 @@ class Lamp:
             except Exception:
                 conn_result.configure(text=t("conn_fail", L), fg=BAD)
 
-        def _test_read() -> None:
-            try:
-                with urllib.request.urlopen(_base() + "/state", timeout=4) as r:
-                    data = json.loads(r.read().decode("utf-8"))
-                if data.get("state"):
-                    read_result.configure(text=t("read_ok", L), fg=OK)
-                else:
-                    read_result.configure(text=t("read_fail", L), fg=BAD)
-            except Exception:
-                read_result.configure(text=t("read_fail", L), fg=BAD)
-
         tk.Button(test_row, text=t("test_conn", L), command=_test_conn).pack(side="left")
-        conn_result.pack(side="left", padx=(8, 14))
-        tk.Button(test_row, text=t("test_read", L), command=_test_read).pack(side="left")
-        read_result.pack(side="left", padx=(8, 0))
+        conn_result.pack(side="left", padx=(10, 0))
 
-        # 手动方式
-        tk.Label(box, text=t("bridge_manual_title", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=10, pady=(10, 0))
+        # 这是什么？
+        tk.Label(box, text=t("bridge_intro_title", L), font=("", 10, "bold")).pack(
+            anchor="w", padx=12, pady=(6, 0))
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
-                 text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(2, 4))
+                 text=t("bridge_intro", L)).pack(anchor="w", padx=12, pady=(2, 8))
 
-        def _copy_addr() -> None:
-            self.root.clipboard_clear()
-            self.root.clipboard_append(PROJECT_ADDR)
-            status.configure(text=t("copied_addr", L), fg=OK)
-
-        tk.Button(box, text=t("bridge_manual_btn", L), command=_copy_addr).pack(
-            anchor="w", padx=12, pady=(0, 8))
-
-        # 让 agent 代劳
+        # 如何获得 IP？
         tk.Label(box, text=t("bridge_auto_title", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=10, pady=(6, 0))
+            anchor="w", padx=12, pady=(4, 0))
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
                  text=t("bridge_auto", L)).pack(anchor="w", padx=12, pady=(2, 4))
 
@@ -865,7 +840,18 @@ class Lamp:
         tk.Button(box, text=t("bridge_auto_btn", L), command=_copy_prompt).pack(
             anchor="w", padx=12, pady=(0, 10))
 
-        # 状态label 要在两个按钮的回调之前定义 —— 挪到前面去了
+        # 手动方式
+        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+                 text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(0, 4))
+
+        def _copy_addr() -> None:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(PROJECT_ADDR)
+            status.configure(text=t("copied_addr", L), fg=OK)
+
+        tk.Button(box, text=t("bridge_manual_btn", L), command=_copy_addr).pack(
+            anchor="w", padx=12, pady=(0, 10))
+
 
         # ── 开关 ──
         tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
