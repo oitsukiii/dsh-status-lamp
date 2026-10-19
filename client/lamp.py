@@ -814,8 +814,10 @@ class Lamp:
             anchor="w", padx=12, pady=(8, 4))
 
         # 地址栏
+        # fill="x" 让它撑满父容器的宽度 —— 父容器的宽度由下面那些
+        # wraplength 文字决定，所以输入框会和说明文字一样宽。
         ent = tk.Entry(box, textvariable=server, width=52)
-        ent.pack(anchor="w", padx=12)
+        ent.pack(fill="x", padx=12)
 
         # 测试连接
         test_row = tk.Frame(box)
