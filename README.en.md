@@ -2,11 +2,20 @@
 
 [中文](README.md) | **English**
 
-![Three states](docs/images/lamp-states-en.png)
-
 A small desktop widget that tells you at a glance what DSH is doing: reasoning, running a command, waiting for your approval, or finished.
 
 No window switching, no log tailing. A glance out of the corner of your eye.
+
+## Contents
+
+- [What the lamp means](#what-the-lamp-means)
+- [Two modes](#two-modes)
+- [Getting started](#getting-started)
+- [How the state is derived](#how-the-state-is-derived)
+- [Latency](#latency)
+- [Other bits](#other-bits)
+- [How this was built](#how-this-was-built)
+- [License](#license)
 
 ---
 

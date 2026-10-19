@@ -70,9 +70,20 @@ except ImportError:  # pragma: no cover
     sys.exit("需要 tkinter（Windows 官方 Python 自带）")
 
 # 提示音：Windows 上用标准库 winsound 播 WAV，零依赖。
+def _resource_root() -> str:
+    """资源根目录。
+
+    PyInstaller 打成的 exe 会把 --add-data 的内容解到 sys._MEIPASS，
+    源码运行时就是脚本所在目录。
+    """
+    if getattr(sys, "frozen", False):
+        return getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def _find_asset_dir(*parts) -> str:
     """素材可能在 <脚本目录>/assets 或 <上一级>/assets（仓库结构 client/ 与根并列）。"""
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = _resource_root()
     for base in (here, os.path.dirname(here)):
         cand = os.path.join(base, "assets", *parts)
         if os.path.isdir(cand) or os.path.isfile(cand):
@@ -123,6 +134,25 @@ from dsh_lamp.backends import (FileBackend, SseBackend, make_backend,  # noqa: E
                                zstd_available)
 from dsh_lamp.i18n import (LANGS, LANG_NAMES, normalize,  # noqa: E402
                            t)
+
+def _ensure_std_streams() -> None:
+    """把 sys.stdout / sys.stderr 接上，哪怕是 None。
+
+    ⚠️ 用 PyInstaller 的 console=False 打包成 exe、或者用 pythonw 运行时，
+    这两个流都是 None。此时任何一次 print(...) 都会抛 AttributeError，
+    而这段代码正好在异常处理里 —— 于是「处理异常」本身把进程打死了。
+    表现就是：窗口版 exe 双击后什么都没有，控制台版却一切正常。
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name, None) is None:
+            try:
+                setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
+            except Exception:
+                pass
+
+
+_ensure_std_streams()
+
 from dsh_lamp.paths import (config_file, default_dsh_home,  # noqa: E402
                             dsh_home, set_dsh_home)
 
@@ -934,6 +964,12 @@ class Lamp:
             自己已经连上了。
             """
             picked = dsh_home_var.get().strip()
+            # 防止把界面上的占位符（<用户名> / <user>）当成真路径存下去 ——
+            # 一旦存进去，dsh_home() 会一直返回它，然后就再也读不到数据了。
+            if "<" in picked or ">" in picked:
+                status.configure(
+                    text="路径里还有尖括号占位符，请点「浏览…」选真实目录", fg=BAD)
+                return
             try:
                 same = (os.path.normcase(os.path.normpath(picked))
                         == os.path.normcase(os.path.normpath(default_dsh_home())))
