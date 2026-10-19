@@ -69,6 +69,16 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     """
     window = DONE_WINDOW_MS if done_window_ms is True else done_window_ms
     path = _newest_session_file()
+
+    # 事件日志的年龄也要算 —— 见下面 offline 的判定。
+    log_path = _newest_event_log()
+    if log_path:
+        try:
+            log_age = time.time() - os.path.getmtime(log_path)
+        except OSError:
+            log_age = None
+    else:
+        log_age = None
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     if path is None:
@@ -127,7 +137,12 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
         phase = {}
 
     # 优先级：离线 > 等回答 > 重试 > 调工具 > 思考 > 完成 > 空闲
-    if age > STALE_SECONDS:
+    # ⚠️ offline 判定必须看【两个数据源】。
+    # 只盯 projcache 会误判：DSH 写 projcache 很懒（实测 Windows 上能几十秒不写），
+    # 而事件日志同时在更新 —— 这时 DSH 明明活着，却被判成离线，
+    # 后面的 phase 判断（queued/tool/thinking）全被这一行盖掉。
+    stale = age > STALE_SECONDS and (log_age is None or log_age > STALE_SECONDS)
+    if stale:
         state = "offline"
     elif pending_calls:
         # 工具调用卡着不动 = 在等你点「允许」⇒ 红灯
