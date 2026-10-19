@@ -16,15 +16,18 @@ def set_dsh_home(path: "str | None") -> None:
     _override = path or None
 
 
+def default_dsh_home() -> str:
+    """未经用户覆盖的默认目录（设置窗口用它做「留空 = 默认」的判断）。"""
+    return os.environ.get("DSH_HOME") or os.path.join(
+        os.path.expanduser("~"), ".dsh")
+
+
 def dsh_home() -> str:
-    """DSH 的数据目录。默认 ~/.dsh，优先级：运行时覆盖 > DSH_HOME > 默认。
+    """DSH 的数据目录。优先级：运行时覆盖 > DSH_HOME > 默认。
 
     状态快照和事件日志都在这个目录下面，所以只需要用户选一次。
     """
-    if _override:
-        return _override
-    return os.environ.get("DSH_HOME") or os.path.join(
-        os.path.expanduser("~"), ".dsh")
+    return _override or default_dsh_home()
 
 
 def config_dir() -> str:

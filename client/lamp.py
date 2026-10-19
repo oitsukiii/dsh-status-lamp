@@ -91,7 +91,8 @@ for _cand in (_HERE, os.path.dirname(_HERE)):
 
 from dsh_lamp.backends import (FileBackend, SseBackend, make_backend,  # noqa: E402
                                zstd_available)
-from dsh_lamp.paths import config_file, dsh_home, set_dsh_home  # noqa: E402
+from dsh_lamp.paths import (config_file, default_dsh_home,  # noqa: E402
+                            dsh_home, set_dsh_home)
 
 DEFAULT_URL = os.environ.get("DSH_LAMP_URL", "http://127.0.0.1:3099/events")
 
@@ -456,7 +457,8 @@ class Lamp:
 
         mode = tk.StringVar(value=self.cfg.get("mode", "local"))
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
-        dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home", ""))
+        # 输入框直接显示【当前生效的目录】，而不是空白 —— 否则用户不知道到底用的是哪
+        dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home") or dsh_home())
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
 
         # ── 数据来源 ──
@@ -475,7 +477,7 @@ class Lamp:
 
         # ── 本机模式配置 ──
         local_box = tk.LabelFrame(mode_area, text=" 本机模式 ")
-        tk.Label(local_box, text="DSH 数据目录（留空 = 默认）").pack(
+        tk.Label(local_box, text="DSH 数据目录").pack(
             anchor="w", padx=10, pady=(8, 2))
         row = tk.Frame(local_box)
         row.pack(anchor="w", padx=12)
@@ -533,18 +535,20 @@ class Lamp:
                  "装一次即可，约 1 MB。")
 
         def _refresh_dep() -> None:
+            """按钮和说明【始终可见】—— 有解码器时按钮变成「重新安装」。"""
             from dsh_lamp.event_tail import decompressor_kind
             kind = decompressor_kind()
             if kind == "none":
-                # 不显示警告文字，只留按钮 + 原因说明
                 dep_label.pack_forget()
+                install_btn.configure(text="一键安装解码器")
                 install_btn.pack(side="left", anchor="w")
-                why_label.pack(anchor="w", padx=14, pady=(4, 0))
             else:
-                install_btn.pack_forget()
-                why_label.pack_forget()
                 dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
                 dep_label.pack(side="left", anchor="w")
+                install_btn.configure(text="重新安装解码器")
+                install_btn.pack(side="left", anchor="w", padx=(10, 0))
+            # 说明文字任何情况下都保留
+            why_label.pack(anchor="w", padx=14, pady=(4, 0))
 
         def _one_click_install() -> None:
             install_btn.configure(state="disabled", text="安装中…")
@@ -573,6 +577,8 @@ class Lamp:
                 else:
                     dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
                     dep_label.pack(side="left", anchor="w")
+                    install_btn.configure(text="重新安装解码器")
+                    install_btn.pack(side="left", anchor="w", padx=(10, 0))
                     status.configure(text="可以手动执行：pip install pyzstd", fg="#c33")
 
             threading.Thread(target=work, daemon=True).start()
@@ -617,8 +623,15 @@ class Lamp:
                 status.configure(text=f"✗ 连不上：{e.__class__.__name__}", fg="#c33")
 
         def _save() -> None:
+            # 和默认目录一致就不写死 —— 否则以后换机器/换用户名会失效
+            picked = dsh_home_var.get().strip()
+            try:
+                same_as_default = (os.path.normcase(os.path.normpath(picked))
+                                   == os.path.normcase(os.path.normpath(default_dsh_home())))
+            except Exception:
+                same_as_default = False
             self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
-                             "dsh_home": dsh_home_var.get().strip(),
+                             "dsh_home": "" if same_as_default else picked,
                              "sound": bool(sound.get())})
             self.url = self.cfg["server"]
             set_dsh_home(self.cfg["dsh_home"])
