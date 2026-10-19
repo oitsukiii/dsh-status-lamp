@@ -102,6 +102,16 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     questions = (rows.get("userQuestions") or {}).get("val") or {}
     q_active = ((questions.get("questions") or {}).get("active")) or []
 
+    # 等待审批：sessionStats.pendingCalls 非空 ⇒ 有工具调用卡住了。
+    #
+    # 这个字段只有在 approval 模式为 ask/always 时才可能有值。
+    # 实测对照：
+    #   approval=never 的机器  ⇒ 跑长命令时 pendingCalls 始终是 {}  ✗
+    #   approval=ask 的机器    ⇒ 弹出审批框时 pendingCalls 有那个 call ✓
+    # 所以它比 userQuestions 更适合表示「审批挂起」。
+    stats = (rows.get("sessionStats") or {}).get("val") or {}
+    pending_calls = stats.get("pendingCalls") or {}
+
     # 事件流尾部 → 此刻在做什么。读失败不影响主流程。
     phase: dict[str, Any] = {}
     try:
@@ -119,6 +129,9 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     # 优先级：离线 > 等回答 > 重试 > 调工具 > 思考 > 完成 > 空闲
     if age > STALE_SECONDS:
         state = "offline"
+    elif pending_calls:
+        # 工具调用卡着不动 = 在等你点「允许」⇒ 红灯
+        state = "question"
     elif q_active:
         state = "question"
     elif retry or phase.get("phase") == "retrying":
@@ -150,6 +163,7 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
         "phase": phase.get("phase"),
         "tool": phase.get("tool"),
         "pending_questions": len(q_active),
+        "pending_calls": len(pending_calls),
         "done_age_s": (
             round((time.time() * 1000 - (events[-1].get("time") or 0)) / 1000, 1)
             if phase.get("phase") in ("done",) and events else None
