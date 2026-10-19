@@ -323,6 +323,7 @@ class Lamp:
             self.root.attributes("-alpha", 0.92)
 
         self._q: queue.Queue = queue.Queue()
+        self._ui_q: queue.Queue = queue.Queue()   # 后台线程请求主线程做的事
         self._n_push = 0
         self._level = BREATH_LEVELS - 1     # 当前亮度档（从最亮开始）
         self._breath_pos = 0
@@ -353,7 +354,8 @@ class Lamp:
         # 旧版先同步 fetch_state()，最坏会卡 2 秒才出窗口，而这时 SSE 还没连 ✗
         # 现在直接连 SSE（首条推送就是当前状态），窗口立刻出来。
         self._start_backend()
-        self.root.after(80, self._drain)            # 主线程排空队列
+        self.root.after(80, self._drain)            # 主线程排空数据队列
+        self.root.after(100, self._drain_ui)        # 主线程执行 UI 请求
         self.root.after(2500, self._fallback_fetch)  # 兜底：2.5s 还没收到就主动查一次
         self.root.after(BREATH_STEP_MS, self._breath_tick)
 
@@ -810,7 +812,7 @@ class Lamp:
                         msg = tail[-1][:140] if tail else f"退出码 {proc.returncode}"
                 except Exception as exc:
                     msg = exc.__class__.__name__
-                self.root.after(0, lambda: done(ok, msg))
+                self.post(lambda: done(ok, msg))
 
             def done(ok: bool, msg: str) -> None:
                 install_btn.configure(state="normal")
@@ -908,7 +910,7 @@ class Lamp:
                         detail = str(data.get("state", ""))
                     except Exception as exc:
                         detail = exc.__class__.__name__
-                self.root.after(0, lambda: report(ok, detail))
+                self.post(lambda: report(ok, detail))
 
             def report(ok: bool, detail: str) -> None:
                 if ok:
@@ -993,19 +995,48 @@ class Lamp:
 
     # ---------- 轮询 ----------
 
-    def _drain(self) -> None:
-        """主线程排空队列 —— 这是 tkinter + 线程唯一安全的方式。"""
-        got = 0
+    def post(self, fn) -> None:
+        """后台线程要碰 UI 时，用这个排队，别直接调 root.after（跨线程不安全）。"""
+        self._ui_q.put(fn)
+
+    def _drain_ui(self) -> None:
         try:
+            while True:
+                try:
+                    fn = self._ui_q.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    fn()
+                except Exception as exc:
+                    print(f"[lamp] ui task failed: {exc.__class__.__name__}: {exc}",
+                          file=sys.stderr, flush=True)
+        finally:
+            self.root.after(100, self._drain_ui)
+
+    def _drain(self) -> None:
+        """主线程排空队列 —— 这是 tkinter + 线程唯一安全的方式。
+
+        ⚠️ 这里的 after() 必须放在 finally 里：_apply 一旦抛异常，
+        没有 finally 的话这个循环就断了，灯从此静默不动（pythonw 下还看不到）。
+        """
+        try:
+            got = 0
             while got < 20:
-                data = self._q.get_nowait()
+                try:
+                    data = self._q.get_nowait()
+                except queue.Empty:
+                    break
                 self._last_rx = time.time()
                 self._n_push += 1
-                self._apply(data)
+                try:
+                    self._apply(data)
+                except Exception as exc:
+                    print(f"[lamp] apply failed: {exc.__class__.__name__}: {exc}",
+                          file=sys.stderr, flush=True)
                 got += 1
-        except queue.Empty:
-            pass
-        self.root.after(100, self._drain)
+        finally:
+            self.root.after(100, self._drain)
 
     def poll(self) -> None:
         """退路：SSE 没连上时的一次性查询。"""

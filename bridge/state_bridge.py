@@ -74,20 +74,40 @@ def _state_hash(state: dict) -> str:
 
 
 def broadcast(payload: bytes) -> None:
-    """往所有连着的客户端写一份；写失败的就从列表里剔除。"""
+    """往所有连着的客户端写一份；写失败的就从列表里剔除。
+
+    ⚠️ 不能在持 _clients_lock 的时候做网络写。
+    以前是持锁写，只要有一个客户端卡住（半开连接、对端不读），
+    整个桥就跟着卡：watcher 推不出去、心跳发不出去、新连接也进不来。
+    现在锁只用来取快照，写全部在锁外做。
+    """
     with _clients_lock:
-        dead = []
-        for handler in _clients:
+        targets = list(_clients)
+
+    dead = []
+    for handler in targets:
+        # 每个客户端一把写锁：watcher 和心跳是两个线程，同时写会把字节流搅乱
+        lock = getattr(handler, "_write_lock", None)
+        try:
+            if lock is not None:
+                lock.acquire()
             try:
                 handler.wfile.write(payload)
                 handler.wfile.flush()
-            except Exception:
-                dead.append(handler)
-        for handler in dead:
-            try:
-                _clients.remove(handler)
-            except ValueError:
-                pass
+            finally:
+                if lock is not None:
+                    lock.release()
+        except Exception:
+            dead.append(handler)
+
+    if dead:
+        with _clients_lock:
+            for handler in dead:
+                try:
+                    _clients.remove(handler)
+                except ValueError:
+                    pass
+        print(f"[bridge] dropped {len(dead)} dead client(s)", file=sys.stderr, flush=True)
 
 
 def _watch_loop() -> None:
@@ -159,13 +179,19 @@ class _Handler(BaseHTTPRequestHandler):
             self.wfile.flush()
         except Exception:
             return
+        self._write_lock = threading.Lock()
+        # 对端不读时写会超时报错，而不是无限阻塞（否则一个假死客户端能拖垮整个桥）
+        try:
+            self.connection.settimeout(15)
+        except Exception:
+            pass
         with _clients_lock:
             _clients.append(self)
         print(f"[bridge] client connected (total {len(_clients)})")
         try:
             # 挂住这条连接。写操作全部由 broadcast 在别的线程完成。
             while True:
-                time.sleep(3600)
+                time.sleep(5)
         except Exception:
             pass
         finally:
