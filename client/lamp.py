@@ -583,7 +583,7 @@ class Lamp:
         dep.pack(anchor="w", fill="x", padx=8, pady=(6, 0))
         dep_label = tk.Label(dep, justify="left", wraplength=400, font=("", 9))
         dep_label.pack(side="left", anchor="w")
-        why_label = tk.Label(dep_box, justify="left", wraplength=520, fg="#999", font=("", 8),
+        why_label = tk.Label(dep_box, justify="left", wraplength=520, fg="#999", font=("", 9),
             text="为什么要安装解码器：DSH 的详细日志是使用 zstd 压缩储存的，\n"
                  "需要装一个 zstd 解码器才能读取“思考中、调用工具”这类状态。")
 
@@ -649,6 +649,12 @@ class Lamp:
 
         # ── 保存 ──
         def _save() -> None:
+            """保存配置、重启后端，然后【异步】验证一次。
+
+            ⚠️ 「保存成功」和「连接成功」是两件事 —— 配置写进磁盘一定成功，
+            但地址可能填错、桥可能没起。两者必须分开报告，否则用户会以为
+            自己已经连上了。
+            """
             picked = dsh_home_var.get().strip()
             try:
                 same = (os.path.normcase(os.path.normpath(picked))
@@ -665,9 +671,45 @@ class Lamp:
             except OSError as e:
                 status.configure(text=f"保存失败：{e}", fg=BAD)
                 return
+
+            # 配置已落盘 ⇒ 这一步是确定的
             self._n_push = 0
             self._start_backend()
-            status.configure(text="已保存并重连", fg=OK)
+            status.configure(text="已保存，正在验证连接…", fg="#888")
+
+            use_local = mode.get() == "local"
+            target = self.cfg["server"]
+
+            def verify() -> None:
+                ok, detail = False, ""
+                if use_local:
+                    try:
+                        from dsh_lamp.state import read_state
+                        st = read_state(None)
+                        ok = bool(st.get("state"))
+                        detail = str(st.get("state", ""))
+                    except Exception as exc:
+                        detail = exc.__class__.__name__
+                else:
+                    try:
+                        base = target.rsplit("/", 1)[0]
+                        with urllib.request.urlopen(base + "/state", timeout=5) as r:
+                            data = json.loads(r.read().decode("utf-8"))
+                        ok = bool(data.get("state"))
+                        detail = str(data.get("state", ""))
+                    except Exception as exc:
+                        detail = exc.__class__.__name__
+                self.root.after(0, lambda: report(ok, detail))
+
+            def report(ok: bool, detail: str) -> None:
+                if ok:
+                    status.configure(text=f"已保存，连接成功（{detail}）", fg=OK)
+                else:
+                    where = "数据目录" if use_local else "桥地址"
+                    status.configure(
+                        text=f"已保存，但连接失败（{detail}）—— 请检查{where}", fg=BAD)
+
+            threading.Thread(target=verify, daemon=True).start()
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
