@@ -540,12 +540,15 @@ class Lamp:
             kind = decompressor_kind()
             install_btn.pack_forget()
             dep_label.pack_forget()
+            installed = kind != "none"
             install_btn.configure(
-                text="一键安装解码器" if kind == "none" else "重新安装解码器")
+                text="重新安装解码器" if installed else "一键安装解码器")
             install_btn.pack(side="left", anchor="w")
-            if kind != "none":
-                dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
-                dep_label.pack(side="left", anchor="w", padx=(10, 0))
+            if installed:
+                dep_label.configure(fg="#2a7", text="已安装")
+            else:
+                dep_label.configure(fg="#c80", text="未安装")
+            dep_label.pack(side="left", anchor="w", padx=(10, 0))
             # 说明文字任何情况下都保留
             why_label.pack(anchor="w", padx=8, pady=(4, 8))
 
