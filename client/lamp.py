@@ -841,7 +841,7 @@ class Lamp:
         # 这是什么？
         tk.Label(box, text=t("bridge_intro_title", L), font=("", 10, "bold")).pack(
             anchor="w", padx=12, pady=(10, 2))
-        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+        tk.Label(box, justify="left", wraplength=620, fg="#555", font=("", 9),
                  text=t("bridge_intro", L)).pack(anchor="w", padx=12)
 
         # 连本机 / 连其他设备 —— 标签和 URL 各自成行
@@ -860,7 +860,7 @@ class Lamp:
         tk.Label(box, text=t("bridge_auto_title", L), font=("", 10, "bold")).pack(
             anchor="w", padx=12, pady=(10, 2))
 
-        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+        tk.Label(box, justify="left", wraplength=620, fg="#555", font=("", 9),
                  text=t("bridge_auto", L)).pack(anchor="w", padx=12, pady=(0, 4))
 
         def _copy_prompt() -> None:
@@ -872,7 +872,7 @@ class Lamp:
             anchor="w", padx=12, pady=(0, 10))
 
         # 手动配置
-        tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
+        tk.Label(box, justify="left", wraplength=620, fg="#555", font=("", 9),
                  text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(0, 0))
         tk.Label(box, text=t("bridge_manual_url", L), font=("Consolas", 9)).pack(
             anchor="w", padx=26, pady=(2, 6))
