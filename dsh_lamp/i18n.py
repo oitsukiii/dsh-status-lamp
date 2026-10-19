@@ -52,7 +52,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "bridge_manual_url": "http://<DSH 所在设备的局域网 IP>:3099/events",
         "bridge_manual_btn": "本项目地址",
         "bridge_auto_title": "如何安装插件并配置",
-        "bridge_auto": "【让 agent 代劳，推荐】点击下面的按钮复制提示词 → 发给你的 dsh → agent 会给你一个地址。\n"
+        "bridge_auto": "【让 agent 自己装，推荐】点击下面的按钮复制提示词 → 发给你的 dsh → agent 会给你一个地址。\n"
                        "重启 DSH 后，把地址粘贴到上面。",
         "bridge_auto_btn": "复制提示词",
         "copied_addr": "已复制项目地址",
@@ -126,7 +126,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "bridge_manual_url": "http://<DSH host LAN IP>:3099/events",
         "bridge_manual_btn": "Project address",
         "bridge_auto_title": "Installing the plugin and configuring it",
-        "bridge_auto": "[Let the agent do it -- recommended] Press the button below to copy a prompt, send it to your dsh, and the agent replies with an address.\n"
+        "bridge_auto": "[Let the agent install it -- recommended] Press the button below to copy a prompt, send it to your dsh, and the agent replies with an address.\n"
                        "After restarting DSH, paste it above.",
         "bridge_auto_btn": "Copy prompt",
         "copied_addr": "Project address copied",
