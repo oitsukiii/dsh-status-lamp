@@ -700,15 +700,16 @@ class Lamp:
         L = self.lang
         self.menu = tk.Menu(self.root, tearoff=0)
 
-        # 常用动作
         self.menu.add_command(label=t("menu_refresh", L), command=self.poll)
-        self.var_top = tk.BooleanVar(value=True)
-        self.menu.add_checkbutton(label=t("menu_topmost", L), variable=self.var_top,
-                                  command=self._toggle_topmost)
+        self.menu.add_separator()
+
         self.menu.add_command(label=t("menu_reset", L), command=self._reset_pos)
         self.menu.add_separator()
 
-        # 三个配置项
+        # 置顶 + 三个配置项算一组
+        self.var_top = tk.BooleanVar(value=True)
+        self.menu.add_checkbutton(label=t("menu_topmost", L), variable=self.var_top,
+                                  command=self._toggle_topmost)
         self.var_sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
         self.menu.add_checkbutton(label=t("sound", L), variable=self.var_sound,
                                   command=self._toggle_sound)
@@ -727,7 +728,6 @@ class Lamp:
         self.menu.add_cascade(label=t("size", L), menu=size_menu)
         self.menu.add_separator()
 
-        # 设置和退出放在最后两行
         self.menu.add_command(label=t("menu_settings", L), command=self.open_settings)
         self.menu.add_command(label=t("menu_quit", L), command=self.root.destroy)
 
