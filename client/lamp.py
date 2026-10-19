@@ -530,25 +530,26 @@ class Lamp:
         why_label = tk.Label(dlg, justify="left", wraplength=560, fg="#999", font=("", 8),
             text="为什么要装：DSH 的详细日志是 zstd 压缩存的（37 MB 压缩 / 128 MB 解压），\n"
                  "装个解码器才能读出「思考中 / 调工具」这类细粒度状态。\n"
-                 "装一次即可，约 1 MB，用当前运行灯的 Python 安装。")
+                 "装一次即可，约 1 MB。")
 
         def _refresh_dep() -> None:
             from dsh_lamp.event_tail import decompressor_kind
             kind = decompressor_kind()
             if kind == "none":
-                dep_label.configure(fg="#c80",
-                    text="⚠️ 没有 zstd 解码器：只能判断「忙/闲」，"
-                         "分不清「在思考」还是「在调工具」")
-                install_btn.pack(side="right", padx=(8, 0))
+                # 不显示警告文字，只留按钮 + 原因说明
+                dep_label.pack_forget()
+                install_btn.pack(side="left", anchor="w")
                 why_label.pack(anchor="w", padx=14, pady=(4, 0))
             else:
-                dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
                 install_btn.pack_forget()
                 why_label.pack_forget()
+                dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
+                dep_label.pack(side="left", anchor="w")
 
         def _one_click_install() -> None:
             install_btn.configure(state="disabled", text="安装中…")
             dep_label.configure(fg="#888", text="正在安装 pyzstd…")
+            dep_label.pack(side="left", anchor="w")
 
             def work() -> None:
                 ok, msg = False, ""
@@ -568,9 +569,10 @@ class Lamp:
                 install_btn.configure(state="normal", text="一键安装解码器")
                 if ok:
                     _refresh_dep()
-                    status.configure(text="✓ 装好了 —— 重启状态灯生效", fg="#2a7")
+                    status.configure(text="✓ 装好了——重启软件生效", fg="#2a7")
                 else:
                     dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
+                    dep_label.pack(side="left", anchor="w")
                     status.configure(text="可以手动执行：pip install pyzstd", fg="#c33")
 
             threading.Thread(target=work, daemon=True).start()
