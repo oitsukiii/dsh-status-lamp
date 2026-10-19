@@ -35,8 +35,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "conn_fail": "连接失败",
         "bridge_addr": "桥地址",
         "no_bridge": " 还没有桥？ ",
-        "copy_hint": "点下面的按钮复制一段指令，发给你的 DSH，"
-                     "让它配好服务器端软件并把地址回给你。",
+        "copy_hint": "点下面的按钮复制一段指令，发给你服务器上的 DSH，"
+                     "让它配好服务器端软件并把桥地址发给你。",
         "copy_btn": "复制配置指令",
         "copied": "已复制，发给你的 DSH 即可",
         "project_url": "项目地址：{url}",
@@ -111,8 +111,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "conn_fail": "Connect failed",
         "bridge_addr": "Bridge address",
         "no_bridge": " No bridge yet? ",
-        "copy_hint": "Copy the instruction below and send it to your own DSH. "
-                     "It will set the server side up and reply with an address.",
+        "copy_hint": "Copy the instruction below and send it to the DSH on your "
+                     "server. It will set the server side up and reply with the "
+                     "bridge address.",
         "copy_btn": "Copy setup prompt",
         "copied": "Copied — send it to your DSH",
         "project_url": "Project: {url}",

@@ -657,7 +657,7 @@ class Lamp:
         dlg = tk.Toplevel(self.root)
         L = self.lang
         dlg.title(t("settings_title", L))
-        dlg.geometry(f"{self.px(620)}x1")   # 高度稍后按内容算
+        # 宽高都先不定，等 pack 完按内容量一次
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
         # 模态：不关掉它就不能操作别的窗口（否则能同时开出好几个设置窗）
@@ -900,7 +900,7 @@ class Lamp:
             """
             try:
                 dlg.update_idletasks()
-                dlg.geometry(f"{self.px(620)}x{dlg.winfo_reqheight()}")
+                dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
             except Exception:
                 pass
 
