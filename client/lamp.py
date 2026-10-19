@@ -842,8 +842,7 @@ class Lamp:
             """灯语说明 —— 四色各是什么意思。"""
             d = tk.Toplevel(dlg)
             d.title(t("lang_title", L))
-            # 不定死尺寸：先给个宽度，高度交给内容自己撑开
-            d.geometry(f"{self.px(600)}x1")
+            # 宽高都交给内容决定（下面 pack 完再量一次）
             d.attributes("-topmost", True)
             d.resizable(False, False)
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
@@ -885,9 +884,9 @@ class Lamp:
             tk.Button(d, text=t("close", L), command=d.destroy).pack(
                 side="bottom", pady=14)
 
-            # 让窗口收到刚好包住内容的高度（不写死，否则不同 DPI / 字体下会留大片空白）
+            # 宽高都按内容收（写死任何一个都会在别的 DPI / 字体 / 语言下留空白）
             d.update_idletasks()
-            d.geometry(f"{self.px(600)}x{d.winfo_reqheight()}")
+            d.geometry(f"{d.winfo_reqwidth()}x{d.winfo_reqheight()}")
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
