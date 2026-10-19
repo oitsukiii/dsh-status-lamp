@@ -102,9 +102,15 @@ Right-click the lamp to open settings.
 
 ### 3.2 The DSH plugin (bridge)
 
-Three ways to install the bridge; pick one.
+Two ways to install it; pick one. **The agent route is recommended** -- it edits the
+configuration itself and knows the pitfalls.
 
-**A · Through the DSH interface** (recommended)
+**A · Let the agent do it** (recommended)
+
+Send the text the "Copy prompt" button puts on your clipboard to the agent on the DSH
+machine. It installs the plugin and replies with the address to use.
+
+**B · Add it by hand in the DSH interface**
 
 Add this in DSH's Plugins page:
 
@@ -114,11 +120,11 @@ github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
 
 Then restart DSH.
 
-**B · Let the agent do it**
+**Either way, it shows up in DSH's plugin list once installed:**
 
-Send the text the "Copy prompt" button puts on your clipboard to the agent on the DSH machine. It installs the plugin and replies with the address.
+![The bridge in the plugin list](docs/images/plugin-list-en.png)
 
-Either way, point the lamp's address at the machine holding the bridge:
+Finally, point the lamp's address at the machine holding the bridge:
 
 ```
 Lamp and DSH on one machine   ->  http://127.0.0.1:3099/events
