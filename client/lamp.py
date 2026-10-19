@@ -153,6 +153,8 @@ DEFAULT_CONFIG = {
     "server": "http://127.0.0.1:3099/events",
     "dsh_home": "",                        # 留空 = 默认 ~/.dsh
     "sound": True,
+    "size": "medium",
+    "breath": True,
 }
 
 
@@ -207,7 +209,9 @@ BG_KEY = "#ff00ff"   # 洋红：灯罩是深灰，用近黑会误吃抗锯齿边
 # 图片素材（有的话优先用，没有就退回画圆）
 ASSET_DIR = _find_asset_dir("states")
 
-LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
+LAMP_H = 160       # 默认高度（像素）；宽度按素材比例算
+# 三档尺寸（高度，96 DPI 下的像素值；实际会再乘 DPI 倍率）
+LAMP_SIZES = {"small": 110, "medium": 160, "large": 220}
 
 # 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
 BREATH_LEVELS = 30     # 亮度档数（越多越平滑；亮度帧惰性生成，不占启动时间）
@@ -333,6 +337,7 @@ class Lamp:
         self._last_rx = time.time()      # 最后一次收到数据的时间（含心跳）
         self._watchdog_ms = 60000        # 局域网模式超过这么久没数据 ⇒ 判离线
         self._photos: dict[str, object] = {}
+        self.lamp_h = LAMP_SIZES.get(cfg.get("size"), LAMP_H)
         self._assets = self._load_assets()
         self.w, self.h = self._window_size()
 
@@ -441,7 +446,7 @@ class Lamp:
                 im = Image.open(path).convert("RGBA")
             except OSError:
                 continue
-            target_h = self.px(LAMP_H)
+            target_h = self.px(self.lamp_h)
             ratio = target_h / im.size[1]
             size = (max(1, int(im.size[0] * ratio)), target_h)
             im = im.resize(size, Image.LANCZOS)
@@ -450,6 +455,21 @@ class Lamp:
             im.putalpha(alpha)
             out[fn] = im
         return out
+
+    def apply_size(self, key: str) -> None:
+        """换尺寸：重载素材、清缓存、重设窗口。"""
+        height = LAMP_SIZES.get(key)
+        if height is None or height == self.lamp_h:
+            return
+        self.lamp_h = height
+        self._assets = self._load_assets()
+        self._frame_cache.clear()
+        self._photos.clear()
+        self._item = None
+        self.w, self.h = self._window_size()
+        self.canvas.configure(width=self.w, height=self.h)
+        self.root.geometry(f"{self.w}x{self.h}+{self.root.winfo_x()}+{self.root.winfo_y()}")
+        self._draw()
 
     def _frames_for(self, fn):
         """取某个状态的亮度帧列表；第一次用到才生成，之后缓存。"""
@@ -650,6 +670,12 @@ class Lamp:
         dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home") or dsh_home())
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
         breath = tk.BooleanVar(value=bool(self.cfg.get("breath", True)))
+        SIZE_LABELS = [("small", t("size_small", self.lang)),
+                       ("medium", t("size_medium", self.lang)),
+                       ("large", t("size_large", self.lang))]
+        cur_size = self.cfg.get("size", "medium")
+        cur_label = next((lab for k, lab in SIZE_LABELS if k == cur_size),
+                         t("size_medium", self.lang))
 
         OK, BAD, WARN = "#2a7", "#c33", "#c80"
 
@@ -856,6 +882,13 @@ class Lamp:
             anchor="w", padx=14, pady=(12, 0))
         tk.Checkbutton(dlg, text=t("breath", L), variable=breath).pack(
             anchor="w", padx=14, pady=(2, 0))
+
+        size_row = tk.Frame(dlg)
+        size_row.pack(anchor="w", fill="x", padx=14, pady=(8, 0))
+        tk.Label(size_row, text=t("size", L)).pack(side="left")
+        size_var = tk.StringVar(value=cur_label)
+        ttk.Combobox(size_row, textvariable=size_var, state="readonly", width=8,
+                     values=[lab for _, lab in SIZE_LABELS]).pack(side="left", padx=(8, 0))
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
@@ -898,7 +931,9 @@ class Lamp:
             self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
                              "dsh_home": "" if same else picked,
                              "sound": bool(sound.get()),
-                             "breath": bool(breath.get())})
+                             "breath": bool(breath.get()),
+                             "size": next((k for k, lab in SIZE_LABELS
+                                           if lab == size_var.get()), "medium")})
             self.url = self.cfg["server"]
             set_dsh_home(self.cfg["dsh_home"])
             try:
@@ -909,6 +944,7 @@ class Lamp:
 
             # 配置已落盘 ⇒ 这一步是确定的
             self._n_push = 0
+            self.apply_size(self.cfg.get("size", "medium"))
             self._start_backend()
             status.configure(text=t("saved_verifying", L), fg="#888")
 
