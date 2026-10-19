@@ -37,6 +37,7 @@ import json
 import os
 import sys
 import queue
+import subprocess
 import threading
 import time
 import urllib.error
@@ -449,17 +450,56 @@ class Lamp:
         tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(anchor="w", padx=24, pady=(10, 0))
 
         from dsh_lamp.event_tail import decompressor_kind
-        kind = decompressor_kind()
-        if kind == "none":
-            tk.Label(dlg, justify="left", wraplength=520, fg="#c80", font=("", 8),
-                     text="⚠️ 没有可用的 zstd 解码器：只显示「忙/闲」，"
-                          "看不到「思考中/调工具」。\n"
-                          "   升级到 Python 3.14（标准库自带），"
-                          "或 pip install pyzstd。").pack(anchor="w", padx=24)
-        else:
-            tk.Label(dlg, justify="left", wraplength=520, fg="#888", font=("", 8),
-                     text=f"zstd 解码：{kind}（stdlib = Python 3.14+ 自带）").pack(
-                anchor="w", padx=24)
+        dep = tk.Frame(dlg)
+        dep.pack(anchor="w", fill="x", padx=24, pady=(8, 0))
+        dep_label = tk.Label(dep, justify="left", wraplength=430, font=("", 8))
+        dep_label.pack(side="left", anchor="w")
+
+        def _refresh_dep() -> None:
+            """重新检测，并决定要不要显示安装按钮。"""
+            kind = decompressor_kind()
+            if kind == "none":
+                dep_label.configure(
+                    fg="#c80",
+                    text="⚠️ 没有 zstd 解码器：只显示「忙/闲」，"
+                         "看不到「思考中/调工具」")
+                install_btn.pack(side="right", padx=(8, 0))
+            else:
+                dep_label.configure(fg="#888", text=f"zstd 解码：{kind} ✓")
+                install_btn.pack_forget()
+
+        def _one_click_install() -> None:
+            """一键装 pyzstd —— 用当前解释器的 pip，不弹 UAC、不碰系统 Python。"""
+            install_btn.configure(state="disabled", text="安装中…")
+            dep_label.configure(fg="#888", text="正在安装 pyzstd…")
+
+            def work() -> None:
+                ok, msg = False, ""
+                try:
+                    proc = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "pyzstd"],
+                        capture_output=True, text=True, timeout=240)
+                    ok = proc.returncode == 0
+                    if not ok:
+                        tail = (proc.stderr or proc.stdout or "").strip().splitlines()
+                        msg = tail[-1][:160] if tail else f"退出码 {proc.returncode}"
+                except Exception as exc:
+                    msg = f"{exc.__class__.__name__}"
+                self.root.after(0, lambda: done(ok, msg))
+
+            def done(ok: bool, msg: str) -> None:
+                install_btn.configure(state="normal", text="一键安装解码器")
+                if ok:
+                    _refresh_dep()
+                    status.configure(text="✓ 装好了 —— 重启状态灯生效", fg="#2a7")
+                else:
+                    dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
+                    status.configure(text="可以手动执行：pip install pyzstd", fg="#c33")
+
+            threading.Thread(target=work, daemon=True).start()
+
+        install_btn = tk.Button(dep, text="一键安装解码器", command=_one_click_install)
+        _refresh_dep()
         status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
         status.pack(anchor="w", padx=24, pady=(6, 0))
 
