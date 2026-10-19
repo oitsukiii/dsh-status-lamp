@@ -1,5 +1,6 @@
 
 # 本地运行时产物（不该进仓库）
+# 插件构建时的临时链接（指向 DSH checkout，不能进仓库）
 assets/preview/
 build/
 config.json
@@ -8,6 +9,8 @@ deploy/seq/
 dist/
 *.log
 *.log.*
+packages/dsh-lamp/lib/*.tsbuildinfo
+packages/dsh-lamp/node_modules/
 *.pid
 *.pyc
 __pycache__/
