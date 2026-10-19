@@ -516,6 +516,9 @@ class Lamp:
 
         ⚠️ 只调【点亮那颗灯泡】的亮度，绝不动灯罩。
         整张图一起调暗的话，深灰外壳会跟着闪，看起来像整个挂件在抖。
+
+        ⚠️ 只用 Pillow，不引 numpy —— numpy 不是这个项目的依赖，
+        在没装它的机器上会直接 ModuleNotFoundError，整个程序起不来。
         """
         if not _HAS_PIL or not self._assets:
             return None
@@ -526,8 +529,7 @@ class Lamp:
         if src is None:
             return None
 
-        import numpy as _np
-        from PIL import ImageEnhance
+        from PIL import ImageDraw, ImageEnhance
 
         size = src.size
         centre = LIT_BULB.get(fn)
@@ -535,9 +537,9 @@ class Lamp:
         if centre is not None:
             sc = size[1] / 320.0          # 素材原生 320 高，换算到当前显示高度
             cx, cy, r = centre[0] * sc, centre[1] * sc, BULB_R * sc
-            yy, xx = _np.mgrid[0:size[1], 0:size[0]]
-            mask = ((yy - cy) ** 2 + (xx - cx) ** 2) <= r ** 2
-            mask_img = Image.fromarray((mask * 255).astype(_np.uint8))
+            mask_img = Image.new("L", size, 0)
+            ImageDraw.Draw(mask_img).ellipse(
+                [cx - r, cy - r, cx + r, cy + r], fill=255)
 
         frames = []
         for lv in range(BREATH_LEVELS):
@@ -1070,7 +1072,7 @@ class Lamp:
                         else "attention_question", self.lang)
         # 调工具时把工具名也显示出来，这是信息量最大的一项
         if state == "tool" and data.get("tool"):
-            bits[-1] = f"{LABEL[state]} · {data['tool']}"
+            bits[-1] = t(f"state_{state}", self.lang) + " · " + str(data["tool"])
         if data.get("phase") and data.get("phase") != "unknown":
             bits.append(f"[{data['phase']}]")
         if data.get("turn") is not None:
