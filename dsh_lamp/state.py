@@ -158,7 +158,10 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
         attention = "question"          # agent 主动提问
     elif phase.get("phase") == "approval":
         state = "question"
-        attention = "approval"          # 审批弹窗挂起
+        attention = "approval"          # 审批弹窗挂起（等「允许」）
+    elif phase.get("phase") == "question":
+        state = "question"
+        attention = "question"          # ask_user_question 弹出，等回答
     elif retry or phase.get("phase") == "retrying":
         state = "retrying"
     elif phase.get("phase") == "tool":

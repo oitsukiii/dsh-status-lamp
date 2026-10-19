@@ -51,6 +51,10 @@ except Exception:
 TAIL_WINDOW = 400_000
 FRAME_MAGIC = b"\x28\xb5\x2f\xfd"
 
+# 这些工具一被调用就意味着「等人」—— 等待期间最后一条事件是 tool/call，
+# 不特殊处理就会被判成普通的「调工具」⇒ 黄灯，而实际应该红灯。
+ATTENTION_TOOLS = {"ask_user_question"}
+
 # 只关心这些事件；其余忽略。
 INTERESTING = {
     "turn/start", "turn/end",
@@ -220,9 +224,13 @@ def current_phase(events: list[dict[str, Any]]) -> dict[str, Any]:
     data = last.get("data") or {}
 
     if typ == "tool/call":
+        name = data.get("name")
+        if name in ATTENTION_TOOLS:
+            # 弹出提问/选择框，正等你回答 ⇒ 需要人介入
+            return {"phase": "question", "tool": name, "seq": last.get("seq")}
         return {
             "phase": "tool",
-            "tool": data.get("name"),
+            "tool": name,
             "seq": last.get("seq"),
         }
     if typ == "step/start":
