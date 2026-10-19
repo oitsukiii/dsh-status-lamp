@@ -1,10 +1,10 @@
 # DSH 状态灯
 
-![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
-![platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square)
-![python](https://img.shields.io/badge/python-3.9%2B-yellow?style=flat-square)
-![dsh](https://img.shields.io/badge/DSH-plugin-orange?style=flat-square)
-![release](https://img.shields.io/badge/release-v1.1.0-brightgreen?style=flat-square)
+![license](https://img.shields.io/badge/license-MIT-blue)
+![platform](https://img.shields.io/badge/platform-Windows-0078D4)
+![python](https://img.shields.io/badge/python-3.9%2B-yellow)
+![dsh](https://img.shields.io/badge/DSH-plugin-orange)
+![release](https://img.shields.io/github/v/release/oitsukiii/dsh-status-lamp?color=brightgreen)
 
 一个信号灯样式的 Windows 桌面小挂件，以及配套的 DSH 插件。一眼看出 DSH 此刻在干什么：工作中显示黄灯 🟡、需要你介入显示红灯 🔴、会话结束显示绿灯 🟢。同时支持播放提示音。
 
