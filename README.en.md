@@ -1,53 +1,65 @@
 # DSH Status Lamp
 
-[中文](README.md) | **English**
-
 A small desktop widget that tells you at a glance what DSH is doing: reasoning, running a command, waiting for your approval, or finished.
 
 No window switching, no log tailing. A glance out of the corner of your eye.
 
-## Contents
+> **How this was built**: driven end to end by **DSH** (DeepSeek Harness) running **DeepSeek V4.1 Flash**, as a vibecoding exercise -- describing what was wanted, running it, noticing what was wrong, saying so. No design document up front. The sprites were generated with ComfyUI and then trimmed by the scripts under `tools/`.
 
-- [What the lamp means](#what-the-lamp-means)
-- [Where the state comes from](#where-the-state-comes-from)
-- [Getting started](#getting-started)
-- [How the state is derived](#how-the-state-is-derived)
-- [Other bits](#other-bits)
-- [How this was built](#how-this-was-built)
-- [License](#license)
+[中文](README.md) | **English**
 
 ---
 
-## What the lamp means
+## 1. Preview
+
+![The four states](docs/images/overview-en.png)
+
+### What the lamp means
 
 | Lamp | Meaning | When |
 |---|---|---|
 | 🔴 Red | **Needs you** | An approval dialog is open (waiting for allow)<br>The agent asked you a question |
-| 🟡 Yellow | **Working** | Running a tool / reasoning / generating / retrying<br>A new turn just started, state not written yet |
+| 🟡 Yellow | **Working** | Running a tool / reasoning / generating / retrying<br>A new turn just started |
 | 🟢 Green | **Just finished** | Stays green for three minutes; turns yellow when you send the next message |
 | ⚪ Off | **Idle** | Nothing in progress, or the data cannot be read |
 
-Right-click the lamp for the menu:
-
-![Context menu](docs/images/menu-en.png)
-
-The `Lamp states` button in the app shows this table with the actual sprites:
+The `Lamp states` button shows this table alongside the sprites themselves:
 
 ![State reference](docs/images/lamp-states-en.png)
 
 ---
 
-## Where the state comes from
+## 2. Configuration
 
-The lamp does one thing: connect to a bridge and read the state. There are two ways
-to install that bridge, and the lamp is configured the same either way -- one address.
+### Context menu
 
-```
-Lamp and DSH on one machine  →  http://127.0.0.1:3099/events
-On another machine           →  http://<DSH host LAN address>:3099/events
-```
+![Context menu](docs/images/menu-en.png)
 
-### Installing the bridge
+| Item | What it does |
+|---|---|
+| **Refresh now** | Fetch the state again instead of waiting for the next push |
+| **Reset position** | Bring the lamp back if it was dragged somewhere invisible |
+| **Always on top** | Whether it floats above other windows |
+| **Play a sound when a task completes** | A chime at the end of a turn |
+| **Breathe the light** | The lit bulb cycles between 60% and 100% brightness, pausing a second at full |
+| **Lamp size** | Small, medium or large; takes effect immediately |
+| **Settings…** | Opens the window below |
+| **Quit** | Closes the lamp |
+
+**Each of these applies and saves immediately** -- there is no save button.
+
+### Settings window
+
+![Settings](docs/images/settings-en.png)
+
+| Item | Meaning |
+|---|---|
+| **Language / 语言** | Chinese or English; the interface changes as soon as you pick one |
+| **Plugin address** | The only required setting. `http://127.0.0.1:3099/events` when the lamp and DSH share a machine; the DSH host's LAN address otherwise |
+| **Test connect** | One request to the bridge's `/state`, purely to check the network |
+| **Installing the plugin and configuring it** | Two ways to install the bridge: copy a prompt for your agent, or copy the project address and do it by hand |
+
+**Where the bridge goes** (and the address is that same machine):
 
 | | How | |
 |---|---|---|
@@ -56,11 +68,9 @@ On another machine           →  http://<DSH host LAN address>:3099/events
 
 Both expose the same endpoints, so the lamp's configuration does not change.
 
-The settings window -- the whole configuration is one address:
+---
 
-![Settings](docs/images/settings-en.png)
-
-## Getting started
+## 3. Getting started
 
 ### Download (Windows)
 
@@ -71,12 +81,10 @@ The settings window -- the whole configuration is one address:
 Python 3.9+, plus:
 
 - **Pillow** — for the sprites (without it the lamp falls back to a drawn circle)
-- **A zstd decoder** — for the event log, optional but recommended:
+- **A zstd decoder** — only for the Python bridge; the plugin does not need one
   - Built in on Python 3.14+
   - Otherwise `pip install pyzstd`
-  - **There is a one-click install button in settings**
-
-#### Local mode (simplest)
+  - There is a one-click install button in settings (visible in Python bridge mode only)
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -87,45 +95,11 @@ python client/lamp.py
 
 Right-click the lamp to open settings.
 
-#### LAN mode, option A: the DSH plugin (recommended)
-
-If DSH runs on that machine, install it as a plugin — it starts and stops with
-DSH, so there is no process to manage:
-
-Add this in DSH's **Plugins** page:
-
-```
-github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
-```
-
-Restart DSH; it listens on `3099`. Point the lamp at `http://<that machine>:3099/events`.
-
-**This is noticeably faster than the Python bridge below**: the plugin subscribes
-to session events directly, with no file polling and no log decompression.
-
-#### LAN mode, option B: the Python bridge
-
-On the machine running DSH:
-
-```bash
-python bridge/state_bridge.py --host 0.0.0.0 --port 3099
-```
-
-Then on your own machine: right-click the lamp → Settings → LAN mode → enter
-
-```
-http://<DSH host IP>:3099/events
-```
-
-⚠️ It is `/events`, not `/state` — the former is the push stream, the latter a one-shot query.
-
-Do not expose port 3099 directly: the bridge has no authentication. Use WireGuard or an SSH tunnel for anything beyond your own network.
-
-See `deploy/dsh-status-bridge.service` for a systemd unit.
-
 ---
 
-## How the state is derived
+## 4. Technical notes
+
+### How the state is derived
 
 DSH writes two things:
 
@@ -134,18 +108,12 @@ DSH writes two things:
 | State snapshot | `~/.dsh/storages/session_projcache/sessions/*.json` | Structured, but **written lazily** (every few tens of seconds) |
 | Event log | `~/.dsh/sessions/<project>/<session>/session.v4.jsonl.zstd` | Written often, but compressed and hundreds of megabytes |
 
-The lamp reads both:
+The **plugin** subscribes to `session/event`, so an event is visible the moment it is committed -- no polling, no decompression.
+The **Python bridge** does it the hard way: polls the snapshot and decompresses the tail of the event log for detail, which ties it to DSH's write timing.
 
-- The **snapshot** gives coarse state — whether a turn is open, whether a tool call is waiting for approval
-- The **event log** gives fine state — `step/start` means reasoning, `tool/call` means running a tool, `approval/asked` means waiting for you
+The event log is read by seeking to the end, finding a frame header and decompressing only the last few hundred kilobytes.
 
-Snapshot alone lags by ten or more seconds at the start of a turn; the log alone cannot tell you who is waiting on an approval.
-
-The log is read by seeking to the end, locating a frame header, and decompressing only the last few hundred kilobytes — never the whole file.
-
----
-
-## On read receipts
+### On read receipts
 
 **Not possible. DSH has no such concept.**
 
@@ -160,7 +128,7 @@ What was checked:
 
 **The architectural reason**: the DSH web client never tells the host that a person is watching. The host knows an event was committed; it does not know whether anything rendered it on screen.
 
-**The nearest signals are all wrong:**
+The nearest signals are all wrong:
 
 ```
 the time of the last user/message   -- that is speaking, not reading
@@ -170,30 +138,17 @@ the client being online             -- a background tab counts as online
 
 **So this lamp answers "what is DSH doing", not "have you read it".**
 
-## Other bits
+### Behaviour
 
-- **Breathing** — brightness cycles between 60% and 100%, pausing a second at full, toggleable
-- **Sound** — a chime when a turn completes, toggleable
-- **Size** — small, medium or large
-- **Bilingual** — Chinese and English, switchable in settings
-- **High DPI** — declares per-monitor DPI awareness, so text stays sharp on scaled displays
-
----
-
-## How this was built
-
-This project was **vibecoded**:
-
-- Runtime: **DSH** (DeepSeek Harness)
-- Model: **DeepSeek V4.1 Flash** (`deepseek-flash`)
-- Everything came from describing what was wanted, running it, noticing what was wrong, and saying so
-
-No design document up front, no architecture diagram. All the code, the asset-processing scripts and this README came out of that loop.
-
-The sprites were generated with ComfyUI, then trimmed and adjusted by the scripts under `tools/`.
+- **Breathing** dims only the lit bulb, never the housing; turning it off returns to full brightness
+- **Sound** plays a chime when a turn completes
+- **Size** small / medium / large, keeping the window where it was
+- **Bilingual** Chinese and English, switching immediately in both the menu and the windows
+- **High DPI** declares per-monitor DPI awareness, so text stays sharp on scaled displays
+- **Sprite handling** the scripts under `tools/` trim the side tabs, recolour the unlit bulbs and generate the brightness steps
 
 ---
 
-## License
+## 5. License
 
 MIT
