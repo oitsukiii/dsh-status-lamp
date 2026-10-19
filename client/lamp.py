@@ -50,8 +50,17 @@ except ImportError:  # pragma: no cover
     sys.exit("需要 tkinter（Windows 官方 Python 自带）")
 
 # 提示音：Windows 上用标准库 winsound 播 WAV，零依赖。
-SOUND_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "assets", "sounds", "notify.wav")
+def _find_asset_dir(*parts) -> str:
+    """素材可能在 <脚本目录>/assets 或 <上一级>/assets（仓库结构 client/ 与根并列）。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    for base in (here, os.path.dirname(here)):
+        cand = os.path.join(base, "assets", *parts)
+        if os.path.isdir(cand) or os.path.isfile(cand):
+            return cand
+    return os.path.join(here, "assets", *parts)
+
+
+SOUND_FILE = _find_asset_dir("sounds", "notify.wav")
 _SOUND_OK = False
 if sys.platform == "win32":
     try:
@@ -176,7 +185,7 @@ RECONNECT_MAX = 30.0   # 最长等待
 BG_KEY = "#ff00ff"   # 洋红：灯罩是深灰，用近黑会误吃抗锯齿边缘
 
 # 图片素材（有的话优先用，没有就退回画圆）
-ASSET_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "states")
+ASSET_DIR = _find_asset_dir("states")
 
 LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
 MARGIN = 8         # 四周留白
@@ -195,8 +204,8 @@ STATE_IMAGE = {
 
 # 每个状态一个颜色。顺序按「越需要你注意，越靠前」。
 PALETTE = {
-    "question":  {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：等你回答
-    "retrying":  {"core": "#e74c3c", "glow": "#f5b7b1", "ring": "#922b21"},  # 红：重试
+    "question":  {"core": "#e74c3c", "glow": "#f5b7b1", "ring": "#922b21"},  # 红：需你介入（审批/提问）
+    "retrying":  {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：重试
     "tool":      {"core": "#3498db", "glow": "#aed6f1", "ring": "#1f618d"},  # 蓝：调工具
     "thinking":  {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},  # 绿：推理/生成
     "done":      {"core": "#1abc9c", "glow": "#a3e4d7", "ring": "#117864"},  # 青：刚完成

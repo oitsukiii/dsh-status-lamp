@@ -65,14 +65,12 @@ STALE_SECONDS = 20.0
 
 
 def _state_hash(state: dict) -> str:
-    """只有状态真的变了才推。
+    """状态指纹 —— 直接用共享实现，别再自己抄一份。
 
-    必须剔除每次读取都会变的时间字段，否则哈希永远不同 ⇒ 每 200ms 推一次 ✗
+    之前这里引用了重构时删掉的 VOLATILE 常量，每次调用都抛 NameError，
+    被 _watch_loop 的 except 吞掉 ⇒ 桥连上后只发一条快照，之后永不推送。
     """
-    stable = {k: v for k, v in state.items() if k not in VOLATILE}
-    return hashlib.sha1(
-        json.dumps(stable, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
+    return state_hash(state)
 
 
 def broadcast(payload: bytes) -> None:
@@ -95,16 +93,23 @@ def broadcast(payload: bytes) -> None:
 def _watch_loop() -> None:
     """状态一变就推。这是服务器内部的检查，和客户端轮询无关。"""
     last = None
+    err_shown = False
     while True:
         try:
-            state = read_state()
+            state = read_state(DONE_WINDOW_MS)
             h = _state_hash(state)
             if h != last:
                 last = h
                 broadcast(("data: " + json.dumps(state, ensure_ascii=False)
                            + "\n\n").encode("utf-8"))
-        except Exception:
-            pass
+            err_shown = False
+        except Exception as exc:
+            # ⚠️ 绝不能静默：之前这里一个 NameError 被吞掉，
+            # 导致桥连上后只发一条快照就再也不推，看起来像"灯卡住了"。
+            if not err_shown:
+                print(f"[bridge] watch error: {exc.__class__.__name__}: {exc}",
+                      file=sys.stderr, flush=True)
+                err_shown = True
         time.sleep(WATCH_INTERVAL)
 
 

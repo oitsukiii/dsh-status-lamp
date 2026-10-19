@@ -27,7 +27,11 @@ DONE_WINDOW_MS: Optional[int] = 180_000
 
 
 def _newest_session_file() -> Optional[str]:
-    files = glob.glob(os.path.join(projcache_dir(), "session-*.json"))
+    # ⚠️ 不能只匹配 "session-*.json"：DSH 有些会话的快照是裸 UUID 文件名
+    #    （实测 29 个文件里有 19 个不带 session- 前缀）。
+    #    只认前缀会在新装机器上导致永远读不到最新会话。
+    files = [f for f in glob.glob(os.path.join(projcache_dir(), "*.json"))
+             if os.path.basename(f) != "global.json"]
     if not files:
         return None
     # 文件名里带 uuid，但 mtime 才是「最近活跃」的可靠依据。
@@ -162,10 +166,12 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     # 但日志里已经有 turn/start / step/start 了 —— 用日志判断，别等快照。
     elif phase.get("phase") in ("thinking", "replying", "starting", "queued"):
         state = "working"
+    elif phase.get("phase") == "done":
+        # 必须排在 open_turn 之前：日志说 turn/end 时，projcache 的
+        # openTurnStartSeq 常常还没写回（懒写），否则绿灯会被吃掉变成黄灯。
+        state = "done"
     elif open_turn is not None:
         state = "thinking"
-    elif phase.get("phase") == "done":
-        state = "done"
     else:
         state = "idle"
 
