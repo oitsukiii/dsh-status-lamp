@@ -127,13 +127,12 @@ Then restart DSH.
 
 ### 3.3 Point the lamp at the bridge
 
-Right-click the lamp, choose **Settings…**, and set **Plugin address** to the machine
-holding the bridge:
+Right-click the lamp, choose **Settings**, and set **Plugin address** to the machine
+running DSH:
 
-```
-Lamp and DSH on one machine   ->  http://127.0.0.1:3099/events
-Lamp on another machine       ->  http://<that machine's LAN address>:3099/events
-```
+Lamp and DSH on the **same** machine -> `http://127.0.0.1:3099/events`
+
+Lamp and DSH on **different** machines -> `http://<the DSH host's LAN address>:3099/events`
 
 Press **Test connect** to confirm it answers, then **Save and reconnect**.
 
