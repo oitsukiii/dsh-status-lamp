@@ -12,7 +12,6 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 - [Two modes](#two-modes)
 - [Getting started](#getting-started)
 - [How the state is derived](#how-the-state-is-derived)
-- [Latency](#latency)
 - [Other bits](#other-bits)
 - [How this was built](#how-this-was-built)
 - [License](#license)
@@ -126,16 +125,6 @@ The lamp reads both:
 Snapshot alone lags by ten or more seconds at the start of a turn; the log alone cannot tell you who is waiting on an approval.
 
 The log is read by seeking to the end, locating a frame header, and decompressing only the last few hundred kilobytes — never the whole file.
-
----
-
-## Latency
-
-**2–4 seconds**, depending on when DSH flushes.
-
-That is the floor. Measured: the bridge costs 30–40 ms, SSE is milliseconds, and everything else is DSH's write. If DSH does not write, the lamp cannot see it, and no polling interval will change that.
-
-The green appears immediately though, because `turn/end` is written to the event log right away.
 
 ---
 
