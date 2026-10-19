@@ -11,9 +11,17 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 ## Contents
 
 - [1. Preview](#1-preview)
+  - [1.1 What the lamp means](#11-what-the-lamp-means)
 - [2. Configuration](#2-configuration)
+  - [2.1 Context menu](#21-context-menu)
+  - [2.2 Settings window](#22-settings-window)
 - [3. Getting started](#3-getting-started)
+  - [3.1 The lamp](#31-the-lamp)
+  - [3.2 The DSH plugin](#32-the-dsh-plugin)
 - [4. Technical notes](#4-technical-notes)
+  - [4.1 How the state is derived](#41-how-the-state-is-derived)
+  - [4.2 On read receipts](#42-on-read-receipts)
+  - [4.3 Behaviour](#43-behaviour)
 - [5. License](#5-license)
 
 ---
@@ -22,7 +30,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 ![The four states](docs/images/overview-en.png)
 
-### What the lamp means
+### 1.1 What the lamp means
 
 | Lamp | Meaning | When |
 |---|---|---|
@@ -35,7 +43,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 ## 2. Configuration
 
-### Context menu
+### 2.1 Context menu
 
 ![Context menu](docs/images/menu-en.png)
 
@@ -52,7 +60,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 **Each of these applies and saves immediately** -- there is no save button.
 
-### Settings window
+### 2.2 Settings window
 
 ![Settings](docs/images/settings-en.png)
 
@@ -128,11 +136,11 @@ Lamp on another machine       ->  http://<that machine's LAN address>:3099/event
 
 ## 4. Technical notes
 
-### How the state is derived
+### 4.1 How the state is derived
 
 Two generations, differing in where the state comes from.
 
-#### From v1.1.0 (current): subscribe to session events
+#### 4.1.1 From v1.1.0 (current): subscribe to session events
 
 The bridge is a DSH plugin running inside the DSH process, subscribing to `session/event`:
 
@@ -153,7 +161,7 @@ DSH commits an event ──► plugin folds it ──► SSE pushes to the lamp
 a disk write; nothing polls, nothing decompresses, no zstd decoder is needed; and each
 event carries its session id, so two sessions cannot be mixed together.
 
-#### v1.0.0: poll the snapshot, decompress the log tail
+#### 4.1.2 v1.0.0: poll the snapshot, decompress the log tail
 
 No plugin. The bridge was a separate process, so it could only read from disk:
 
@@ -174,7 +182,7 @@ so in principle they could belong to different sessions.
 The Python bridge remains (see [`docs/python-bridge.md`](docs/python-bridge.md)), but
 the plugin is the recommended route.
 
-### On read receipts
+### 4.2 On read receipts
 
 **Not possible. DSH has no such concept.**
 
@@ -199,7 +207,7 @@ the client being online             -- a background tab counts as online
 
 **So this lamp answers "what is DSH doing", not "have you read it".**
 
-### Behaviour
+### 4.3 Behaviour
 
 - **Breathing** dims only the lit bulb, never the housing; turning it off returns to full brightness
 - **Sound** plays a chime when a turn ends, or when the lamp turns red because it needs you
