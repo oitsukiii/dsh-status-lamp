@@ -166,12 +166,15 @@ PROJECT_ADDR = "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp"
 # 给 agent 的提示词 —— 让它在 DSH 那台机器上把插件装好并回报地址
 AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接插件，并把地址告诉我。
 
-在 DSH 的「插件」页添加下面这个地址：
+插件地址（在 DSH 的「插件」页添加）：
 {PROJECT_ADDR}
 
-如果插件页装不上，手动改 profile（一般在 $DSH_HOME/profiles/web/）：
+【如果是我自己在插件页点】装完提醒我重启 DSH 即可，你不用动。
+
+【如果你要自己动手装】（我没法操作界面，或插件页装失败时）：
 1. git clone --depth 1 https://github.com/oitsukiii/dsh-status-lamp /tmp/dsl
 2. 把 /tmp/dsl/packages/dsh-lamp 拷到 <profile>/vendor/dsh-lamp-bridge
+   （profile 一般在 $DSH_HOME/profiles/web/）
 3. 改 <profile>/package.json：
    - dsh.profile.bundles 里加上 "dsh-lamp-bridge"
    - dependencies 里加 "dsh-lamp-bridge": "file:./vendor/dsh-lamp-bridge"
@@ -180,7 +183,7 @@ AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接�
    且它的 cordis.patch.yml 必须用 - insert: 包裹条目（裸 - id: 只会「修改已有」，
    新增无效）。缺任何一条 DSH 都会静默跳过，日志里连插件名都不出现。
 
-装好后需要重启 DSH 才生效 —— 这会影响你正在进行的会话，动手前请先问我。
+装好后需要重启 DSH 才生效 —— 这会影响当前会话，提醒我重启，不要自己动手。
 
 重启后确认这行能返回 JSON：
     curl -s http://127.0.0.1:3099/state
