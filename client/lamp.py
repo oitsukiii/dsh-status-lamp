@@ -208,6 +208,11 @@ BG_KEY = "#ff00ff"   # 洋红：灯罩是深灰，用近黑会误吃抗锯齿边
 ASSET_DIR = _find_asset_dir("states")
 
 LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
+
+# 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
+BREATH_LEVELS = 10     # 亮度档数（越多越平滑，也越占内存）
+BREATH_MIN = 0.70      # 最暗 = 70%
+BREATH_STEP_MS = 130   # 每档停留毫秒（10 档 × 130ms ≈ 一个方向 1.3 秒）
 MARGIN = 8         # 四周留白
 
 # 状态 → 素材文件名
@@ -319,6 +324,9 @@ class Lamp:
 
         self._q: queue.Queue = queue.Queue()
         self._n_push = 0
+        self._level = BREATH_LEVELS - 1     # 当前亮度档（从最亮开始）
+        self._breath_pos = 0
+        self._item = None
         self._last_rx = time.time()      # 最后一次收到数据的时间（含心跳）
         self._watchdog_ms = 60000        # 局域网模式超过这么久没数据 ⇒ 判离线
         self._photos: dict[str, object] = {}
@@ -347,6 +355,7 @@ class Lamp:
         self._start_backend()
         self.root.after(80, self._drain)            # 主线程排空队列
         self.root.after(2500, self._fallback_fetch)  # 兜底：2.5s 还没收到就主动查一次
+        self.root.after(BREATH_STEP_MS, self._breath_tick)
 
     def _start_backend(self) -> None:
         """按配置起后端：本机读文件 / 局域网连桥。"""
@@ -443,17 +452,27 @@ class Lamp:
             alpha = im.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
             im.putalpha(alpha)
 
-            # 合成到色键底色上（RGBA 直接给 PhotoImage 会丢掉 alpha）
-            bg = Image.new("RGB", size, BG_KEY)
-            bg.paste(im, (0, 0), im)
-            out[fn] = bg
+            # 为每个亮度档位各生成一张 —— 实时渲染每帧太慢，预生成后只切引用
+            frames = []
+            for lv in range(BREATH_LEVELS):
+                # 档位 0 最暗、最后一档最亮；三角波在下面控制来回走
+                factor = BREATH_MIN + (1.0 - BREATH_MIN) * (lv / (BREATH_LEVELS - 1))
+                dim = im
+                if factor < 1.0 and _HAS_PIL:
+                    from PIL import ImageEnhance
+                    dim = ImageEnhance.Brightness(im).enhance(factor)
+                    dim.putalpha(im.getchannel("A"))   # 保持 alpha 不变
+                bg = Image.new("RGB", size, BG_KEY)
+                bg.paste(dim, (0, 0), dim)
+                frames.append(bg)
+            out[fn] = frames
         return out
 
     def _window_size(self) -> tuple:
         """窗口尺寸 = 素材尺寸 + 留白。"""
         margin = self.px(MARGIN)
         if self._assets:
-            any_im = next(iter(self._assets.values()))
+            any_im = next(iter(self._assets.values()))[0]
             return (any_im.size[0] + margin * 2, any_im.size[1] + margin * 2)
         # 退回圆点：正方形
         side = self.px(64) + self.px(14) * 2
@@ -490,14 +509,15 @@ class Lamp:
     def _draw(self) -> None:
         c = self.canvas
         c.delete("all")
+        self._item = None
 
-        # 有素材就用素材（像素风红绿灯）
         fn = STATE_IMAGE.get(self.state)
-        im = self._assets.get(fn) if fn else None
-        if im is not None:
+        frames = self._assets.get(fn) if fn else None
+        if frames:
+            im = frames[self._level]
             photo = ImageTk.PhotoImage(im)
             self._photos[self.state] = photo      # 必须留引用，否则会被回收成空白
-            c.create_image(self.w // 2, self.h // 2, image=photo)
+            self._item = c.create_image(self.w // 2, self.h // 2, image=photo)
             return
 
         # 没素材：退回画一个圆点
@@ -511,6 +531,29 @@ class Lamp:
         c.create_oval(cx - r * 0.55, cy - r * 0.6,
                       cx - r * 0.15, cy - r * 0.2,
                       fill="#ffffff", outline="", stipple="gray50")
+
+    def _breath_tick(self) -> None:
+        """呼吸灯：三角波在 70%..100% 之间来回。
+
+        只换 canvas 上的图片引用，不重建 item，开销很低。
+        """
+        try:
+            if self.cfg.get("breath", True):
+                n = BREATH_LEVELS
+                # 0,1,2..n-1, n-2..,1 的往返序列
+                self._breath_pos = (self._breath_pos + 1) % max(1, 2 * n - 2)
+                pos = self._breath_pos
+                self._level = pos if pos < n else 2 * n - 2 - pos
+                fn = STATE_IMAGE.get(self.state)
+                frames = self._assets.get(fn) if fn else None
+                if frames and self._item is not None:
+                    im = frames[self._level]
+                    photo = ImageTk.PhotoImage(im)
+                    self._photos[self.state] = photo
+                    self.canvas.itemconfigure(self._item, image=photo)
+        except Exception:
+            pass
+        self.root.after(BREATH_STEP_MS, self._breath_tick)
 
     # ---------- 拖拽 ----------
 
