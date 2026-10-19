@@ -210,9 +210,9 @@ ASSET_DIR = _find_asset_dir("states")
 LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
 
 # 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
-BREATH_LEVELS = 10     # 亮度档数（越多越平滑，也越占内存）
-BREATH_MIN = 0.50      # 最暗 = 50%
-BREATH_STEP_MS = 130   # 每档停留毫秒（10 档 × 130ms ≈ 一个方向 1.3 秒）
+BREATH_LEVELS = 30     # 亮度档数（越多越平滑；亮度帧惰性生成，不占启动时间）
+BREATH_MIN = 0.60      # 最暗 = 60%
+BREATH_STEP_MS = 45    # 每档停留毫秒（30 档 × 45ms ≈ 一个方向 1.35 秒）
 MARGIN = 8         # 四周留白
 
 # 状态 → 素材文件名
@@ -325,6 +325,7 @@ class Lamp:
         self._q: queue.Queue = queue.Queue()
         self._ui_q: queue.Queue = queue.Queue()   # 后台线程请求主线程做的事
         self._n_push = 0
+        self._frame_cache: dict = {}        # 状态 → 亮度帧（惰性生成）
         self._level = BREATH_LEVELS - 1     # 当前亮度档（从最亮开始）
         self._breath_pos = 0
         self._item = None
@@ -423,15 +424,15 @@ class Lamp:
         return max(1, int(round(n * getattr(self, "dpi_scale", 1.0))))
 
     def _load_assets(self) -> dict:
-        """把状态图读进来，合成到色键背景上 —— 这样 tkinter 的透明色键才能生效。
+        """载入素材，只做「缩放 + alpha 二值化」，不预生成亮度帧。
 
-        没有 Pillow 或没有素材时返回空字典，调用方会退回画圆。
+        30 档 × 5 个状态 = 150 张，全预生成会让启动明显变慢，
+        所以亮度帧按需生成并缓存（见 _frames_for）。
         """
-        if not _HAS_PIL:
-            return {}
-        want = set(STATE_IMAGE.values())
         out: dict = {}
-        for fn in want:
+        if not _HAS_PIL:
+            return out
+        for fn in set(STATE_IMAGE.values()):
             path = os.path.join(ASSET_DIR, fn)
             if not os.path.isfile(path):
                 continue
@@ -439,42 +440,53 @@ class Lamp:
                 im = Image.open(path).convert("RGBA")
             except OSError:
                 continue
-            # 等比缩放到目标高度（高 DPI 下按倍数放大，否则灯会显得很小）
             target_h = self.px(LAMP_H)
             ratio = target_h / im.size[1]
             size = (max(1, int(im.size[0] * ratio)), target_h)
             im = im.resize(size, Image.LANCZOS)
-
-            # ⚠️ alpha 二值化 —— 必须做，否则灯周围会有一圈洋红光边。
-            #
-            # tkinter 的 -transparentcolor 只抠【精确等于】BG_KEY 的像素。
-            # 素材边缘的抗锯齿半透明像素合成到洋红底上会得到 #ff88ff 之类，
-            # 不匹配色键 ⇒ 抠不掉 ⇒ 视觉上就是一圈粉红描边。
-            # 像素风本来就是硬边，二值化不影响观感。
+            # alpha 二值化：否则缩放产生的半透明像素合成到洋红色键上会留一圈粉边
             alpha = im.getchannel("A").point(lambda v: 255 if v >= 128 else 0)
             im.putalpha(alpha)
-
-            # 为每个亮度档位各生成一张 —— 实时渲染每帧太慢，预生成后只切引用
-            frames = []
-            for lv in range(BREATH_LEVELS):
-                # 档位 0 最暗、最后一档最亮；三角波在下面控制来回走
-                factor = BREATH_MIN + (1.0 - BREATH_MIN) * (lv / (BREATH_LEVELS - 1))
-                dim = im
-                if factor < 1.0 and _HAS_PIL:
-                    from PIL import ImageEnhance
-                    dim = ImageEnhance.Brightness(im).enhance(factor)
-                    dim.putalpha(im.getchannel("A"))   # 保持 alpha 不变
-                bg = Image.new("RGB", size, BG_KEY)
-                bg.paste(dim, (0, 0), dim)
-                frames.append(bg)
-            out[fn] = frames
+            out[fn] = im
         return out
+
+    def _frames_for(self, fn):
+        """取某个状态的亮度帧列表；第一次用到才生成，之后缓存。"""
+        if not _HAS_PIL or not self._assets:
+            return None
+        cache = self._frame_cache
+        if fn in cache:
+            return cache[fn]
+        src = self._assets.get(fn)
+        if src is None:
+            return None
+
+        from PIL import ImageEnhance
+        size = src.size
+        frames = []
+        for lv in range(BREATH_LEVELS):
+            factor = BREATH_MIN + (1.0 - BREATH_MIN) * (lv / (BREATH_LEVELS - 1))
+            if factor >= 1.0:
+                dim = src
+            else:
+                dim = ImageEnhance.Brightness(src).enhance(factor)
+                dim.putalpha(src.getchannel("A"))    # 亮度不能改动 alpha
+            bg = Image.new("RGB", size, BG_KEY)
+            bg.paste(dim, (0, 0), dim)
+            frames.append(bg)
+
+        # 只留最近两个状态：5 个全留会白占十几 MB
+        if len(cache) >= 2:
+            cache.pop(next(iter(cache)))
+        cache[fn] = frames
+        return frames
+
 
     def _window_size(self) -> tuple:
         """窗口尺寸 = 素材尺寸 + 留白。"""
         margin = self.px(MARGIN)
         if self._assets:
-            any_im = next(iter(self._assets.values()))[0]
+            any_im = next(iter(self._assets.values()))
             return (any_im.size[0] + margin * 2, any_im.size[1] + margin * 2)
         # 退回圆点：正方形
         side = self.px(64) + self.px(14) * 2
@@ -514,7 +526,7 @@ class Lamp:
         self._item = None
 
         fn = STATE_IMAGE.get(self.state)
-        frames = self._assets.get(fn) if fn else None
+        frames = self._frames_for(fn) if fn else None
         if frames:
             im = frames[self._level]
             photo = ImageTk.PhotoImage(im)
@@ -537,7 +549,7 @@ class Lamp:
     def _refresh_frame(self) -> None:
         """只换当前帧的图片，不重建 canvas item。"""
         fn = STATE_IMAGE.get(self.state)
-        frames = self._assets.get(fn) if fn else None
+        frames = self._frames_for(fn) if fn else None
         if not frames:
             return
         photo = ImageTk.PhotoImage(frames[self._level])
@@ -563,7 +575,7 @@ class Lamp:
                 pos = self._breath_pos
                 self._level = pos if pos < n else 2 * n - 2 - pos
                 fn = STATE_IMAGE.get(self.state)
-                frames = self._assets.get(fn) if fn else None
+                frames = self._frames_for(fn) if fn else None
                 if frames and self._item is not None:
                     im = frames[self._level]
                     photo = ImageTk.PhotoImage(im)
@@ -620,6 +632,10 @@ class Lamp:
         dlg.geometry(f"{self.px(620)}x1")   # 高度稍后按内容算
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
+        # 模态：不关掉它就不能操作别的窗口（否则能同时开出好几个设置窗）
+        dlg.transient(self.root)
+        dlg.grab_set()
+        dlg.protocol("WM_DELETE_WINDOW", lambda: (dlg.grab_release(), dlg.destroy()))
 
         mode = tk.StringVar(value=self.cfg.get("mode", "local"))
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
@@ -929,6 +945,17 @@ class Lamp:
             # 宽高都交给内容决定（下面 pack 完再量一次）
             d.attributes("-topmost", True)
             d.resizable(False, False)
+            # 父窗口已经 grab 了，子窗口必须自己再 grab 一次，否则点不动
+            d.transient(dlg)
+            d.grab_set()
+
+            def _close() -> None:
+                try:
+                    d.grab_release()
+                    dlg.grab_set()      # 把模态交还给设置窗口
+                except Exception:
+                    pass
+                d.destroy()
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
                 anchor="w", padx=18, pady=(16, 10))
 
@@ -965,10 +992,11 @@ class Lamp:
                          font=("", 10, "bold")).pack(side="left")
                 for line in details:
                     tk.Label(col, text=f"· {line}", fg="#555", font=("", 9)).pack(anchor="w")
-            tk.Button(d, text=t("close", L), command=d.destroy).pack(
+            tk.Button(d, text=t("close", L), command=_close).pack(
                 side="bottom", pady=14)
 
             # 宽高都按内容收（写死任何一个都会在别的 DPI / 字体 / 语言下留空白）
+            d.protocol("WM_DELETE_WINDOW", _close)
             d.update_idletasks()
             d.geometry(f"{d.winfo_reqwidth()}x{d.winfo_reqheight()}")
             self._center(d)
@@ -977,7 +1005,8 @@ class Lamp:
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
         tk.Button(bar, text=t("lang_btn", L),
                   command=_show_lamp_language).pack(side="left")
-        tk.Button(bar, text=t("cancel", L), command=dlg.destroy).pack(side="right")
+        tk.Button(bar, text=t("cancel", L),
+                  command=lambda: (dlg.grab_release(), dlg.destroy())).pack(side="right")
         tk.Button(bar, text=t("save", L), command=_save).pack(side="right", padx=8)
 
         _apply_mode()
