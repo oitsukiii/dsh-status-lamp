@@ -16,8 +16,8 @@ No window switching, no log tailing. A glance out of the corner of your eye.
   - [2.1 Context menu](#21-context-menu)
   - [2.2 Settings window](#22-settings-window)
 - [3. Getting started](#3-getting-started)
-  - [3.1 The lamp](#31-the-lamp-desktop-widget)
-  - [3.2 The DSH plugin](#32-the-dsh-plugin-bridge)
+  - [3.1 Install the lamp](#31-install-the-lamp-desktop-widget)
+  - [3.2 Install the DSH plugin](#32-install-the-dsh-plugin-bridge)
   - [3.3 Point the lamp at the bridge](#33-point-the-lamp-at-the-bridge)
 - [4. Technical notes](#4-technical-notes)
   - [4.1 How the state is derived](#41-how-the-state-is-derived)
@@ -84,13 +84,15 @@ and restart DSH. It starts and stops with DSH; there is no process to watch.
 
 Two things to install: **the lamp on your desktop**, and **the bridge plugin on the machine running DSH**.
 
-### 3.1 The lamp (desktop widget)
+### 3.1 Install the lamp (desktop widget)
 
-**Windows, download** (recommended):
+**A · Download for Windows** (recommended)
 
 [**Download DSH-Lamp.exe**](https://github.com/oitsukiii/dsh-status-lamp/releases/latest) — no Python needed, just run it.
 
-**From source** needs Python 3.9+ and Pillow:
+**B · Run from source**
+
+Needs Python 3.9+ and Pillow:
 
 ```bash
 git clone https://github.com/oitsukiii/dsh-status-lamp.git
@@ -99,7 +101,7 @@ pip install pillow
 python client/lamp.py
 ```
 
-### 3.2 The DSH plugin (bridge)
+### 3.2 Install the DSH plugin (bridge)
 
 Two ways to install it; pick one. **The agent route is recommended** -- it edits the
 configuration itself and knows the pitfalls.
