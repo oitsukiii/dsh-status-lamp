@@ -59,6 +59,8 @@ INTERESTING = {
     "tool/call", "tool/result",
     "user/message",
     "llm/retry", "llm/retry-started",
+    # 审批：asked 表示弹窗等你点，decided 表示已经处理完
+    "approval/asked", "approval/decided",
 }
 
 
@@ -204,6 +206,14 @@ def current_phase(events: list[dict[str, Any]]) -> dict[str, Any]:
     interested = [e for e in events if e.get("type") in INTERESTING]
     if not interested:
         return {"phase": "unknown"}
+
+    # 未决审批优先级最高：从后往前找，碰到 decided 就停（已经处理过了）
+    for e in reversed(interested):
+        et = e.get("type")
+        if et == "approval/asked":
+            return {"phase": "approval", "seq": e.get("seq")}
+        if et == "approval/decided":
+            break
 
     last = interested[-1]
     typ = last.get("type")

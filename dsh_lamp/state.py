@@ -120,6 +120,10 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     #   approval=ask 的机器    ⇒ 弹出审批框时 pendingCalls 有那个 call ✓
     # 所以它比 userQuestions 更适合表示「审批挂起」。
     stats = (rows.get("sessionStats") or {}).get("val") or {}
+    # ⚠️ pendingCalls 不能用来判断「等审批」！
+    #    实测它只要【有工具在跑】就是非空，正常执行时也非空，
+    #    拿它当红灯会让灯在跑工具时一直误报。
+    #    这里只保留计数给调试用，不参与状态判定。
     pending_calls = stats.get("pendingCalls") or {}
 
     # 事件流尾部 → 此刻在做什么。读失败不影响主流程。
@@ -127,7 +131,7 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     try:
         log = _newest_event_log()
         if log:
-            events = read_tail_events(log, want=24)
+            events = read_tail_events(log, want=40)
             phase = current_phase(events)
             if phase.get("phase") == "done" and events and window is not None:
                 last_ms = events[-1].get("time") or 0
@@ -144,13 +148,13 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     stale = age > STALE_SECONDS and (log_age is None or log_age > STALE_SECONDS)
     if stale:
         state = "offline"
-    elif pending_calls:
-        # 工具调用卡着不动 = 在等你点「允许」⇒ 红灯
-        state = "question"
     elif q_active:
         state = "question"
     elif retry or phase.get("phase") == "retrying":
         state = "retrying"
+    elif phase.get("phase") == "approval":
+        # 审批弹窗挂起 ⇒ 要你点「允许」⇒ 红灯
+        state = "question"
     elif phase.get("phase") == "tool":
         state = "tool"
     # ⭐ 关键：事件日志比 projcache 写得快得多。
