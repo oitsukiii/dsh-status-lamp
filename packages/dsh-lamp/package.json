@@ -5,10 +5,12 @@
   "type": "module",
   "main": "lib/index.js",
   "exports": {
-    ".": "./lib/index.js"
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "lib",
+    "cordis.patch.yml",
     "README.md"
   ],
   "keywords": [
@@ -25,5 +27,10 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
   }
 }

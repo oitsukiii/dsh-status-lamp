@@ -1,0 +1,6 @@
+# DSH 状态灯的桥。监听会话事件，折叠成四色，走 HTTP + SSE 给桌面小挂件。
+- id: dsh-lamp-bridge
+  name: 'dsh-lamp-bridge'
+  config:
+    host: '0.0.0.0'
+    port: 3099
