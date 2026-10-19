@@ -23,10 +23,6 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 | 🟢 Green | **Just finished** | Stays green for three minutes; turns yellow when you send the next message |
 | ⚪ Off | **Idle** | Nothing in progress, or the data cannot be read |
 
-The `Lamp states` button shows this table alongside the sprites themselves:
-
-![State reference](docs/images/lamp-states-en.png)
-
 ---
 
 ## 2. Configuration
