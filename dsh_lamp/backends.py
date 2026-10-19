@@ -58,8 +58,10 @@ class FileBackend(BaseBackend):
 
     def __init__(self, on_state, done_window_ms: "int | None" = None) -> None:
         super().__init__(on_state)
-        # 本机模式默认永不超时（绿灯只被下一次 turn 打断）
-        self.done_window_ms = done_window_ms
+        # 和桥保持一致的默认值：绿灯保持 3 分钟后回退。
+        # 以前默认 None（永不超时），结果本机模式下 done 之后灯永远是绿的，
+        # 而且「完成」提示音也不会再响（它只在 done 的上升沿触发）。
+        self.done_window_ms = 180_000 if done_window_ms is None else done_window_ms
         self._last: Optional[str] = None
 
     def _run(self) -> None:
@@ -73,6 +75,10 @@ class FileBackend(BaseBackend):
             except Exception:
                 pass
             self._stop.wait(FILE_INTERVAL)
+
+    def force(self) -> None:
+        """清掉指纹，让下一轮必定重新下发一次（供「立刻刷新」用）。"""
+        self._last = None
 
 
 class SseBackend(BaseBackend):

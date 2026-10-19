@@ -1039,7 +1039,17 @@ class Lamp:
             self.root.after(100, self._drain)
 
     def poll(self) -> None:
-        """退路：SSE 没连上时的一次性查询。"""
+        """退路：SSE 没连上时的一次性查询。
+
+        ⚠️ 本机模式下不能走 HTTP —— self.url 还是局域网桥的地址，
+        桥没起就会失败并把自己判成 idle；而 FileBackend 只在指纹变化时才推，
+        于是灯会一直停在错误状态上。本机模式直接让后端立刻重读。
+        """
+        if self.cfg.get("mode") == "local":
+            be = getattr(self, "_backend", None)
+            if be is not None and hasattr(be, "force"):
+                be.force()
+            return
         self._apply(fetch_state(self.url))
 
     def _apply(self, data: dict) -> None:

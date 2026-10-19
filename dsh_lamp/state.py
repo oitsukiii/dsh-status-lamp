@@ -26,7 +26,17 @@ STALE_SECONDS = 60.0
 DONE_WINDOW_MS: Optional[int] = 180_000
 
 
-def _newest_session_file() -> Optional[str]:
+def _session_id_of_log(log_path: Optional[str]) -> Optional[str]:
+    """从事件日志路径里取会话 id：.../<proj>/session-<uuid>/session.v4.jsonl.zstd"""
+    if not log_path:
+        return None
+    name = os.path.basename(os.path.dirname(log_path))
+    if name.startswith("session-"):
+        name = name[len("session-"):]
+    return name or None
+
+
+def _newest_session_file(prefer_id: Optional[str] = None) -> Optional[str]:
     # ⚠️ 不能只匹配 "session-*.json"：DSH 有些会话的快照是裸 UUID 文件名
     #    （实测 29 个文件里有 19 个不带 session- 前缀）。
     #    只认前缀会在新装机器上导致永远读不到最新会话。
@@ -35,6 +45,11 @@ def _newest_session_file() -> Optional[str]:
     if not files:
         return None
     # 文件名里带 uuid，但 mtime 才是「最近活跃」的可靠依据。
+    # 优先用【和事件日志同一个会话】的快照，避免拿旧会话的数据拼状态
+    if prefer_id:
+        for f in files:
+            if prefer_id in os.path.basename(f):
+                return f
     return max(files, key=os.path.getmtime)
 
 
@@ -72,10 +87,9 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     done_window_ms: True = 用模块默认值；None = 永不超时；数字 = 毫秒。
     """
     window = DONE_WINDOW_MS if done_window_ms is True else done_window_ms
-    path = _newest_session_file()
-
-    # 事件日志的年龄也要算 —— 见下面 offline 的判定。
+    # 先找事件日志，再按它的会话 id 去配对快照 —— 两边必须是同一个会话
     log_path = _newest_event_log()
+    path = _newest_session_file(_session_id_of_log(log_path))
     if log_path:
         try:
             log_age = time.time() - os.path.getmtime(log_path)

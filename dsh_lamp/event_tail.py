@@ -114,16 +114,12 @@ def _decompress(chunk: bytes) -> Optional[str]:
             pass
 
     if _HAS_PYZSTD:
-        # 流式解码：能容忍尾部被截断（跨帧连续读）
+        # ⚠️ stream_reader 属于 zstandard 库，pyzstd 没有这个方法 —— 之前
+        # 每次调用都抛 AttributeError 并被 except 吞掉，等于 pyzstd 从未生效。
+        # pyzstd 处理多帧 + 容忍截断尾巴的正确做法是 decompressobj()。
         try:
-            dctx = pyzstd.ZstdDecompressor()
-            out = bytearray()
-            with dctx.stream_reader(io.BytesIO(chunk)) as reader:
-                while True:
-                    piece = reader.read(65536)
-                    if not piece:
-                        break
-                    out += piece
+            obj = pyzstd.ZstdDecompressor().decompressobj()
+            out = obj.decompress(chunk)
             if out:
                 return bytes(out).decode("utf-8", "replace")
         except Exception:
