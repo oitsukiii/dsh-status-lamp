@@ -166,15 +166,28 @@ PROJECT_ADDR = "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp"
 # 给 agent 的提示词 —— 让它在 DSH 那台机器上把插件装好并回报地址
 AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接插件，并把地址告诉我。
 
-项目地址：{PROJECT_ADDR}
+在 DSH 的「插件」页添加下面这个地址：
+{PROJECT_ADDR}
 
-步骤：
-1. 在 DSH 的插件页添加上面这个地址，或者按仓库里 AGENT.md 的说明操作
-2. 装好后需要重启 DSH（这会中断当前会话，动手前请先征得我同意）
-3. 重启后确认 http://127.0.0.1:3099/state 能返回 JSON
-4. 告诉我一个可以填进状态灯的地址：
-   - 如果状态灯就跑在这台机器上：http://127.0.0.1:3099/events
-   - 如果在另一台机器：http://<这台机器的局域网 IP>:3099/events
+如果插件页装不上，手动改 profile（一般在 $DSH_HOME/profiles/web/）：
+1. git clone --depth 1 https://github.com/oitsukiii/dsh-status-lamp /tmp/dsl
+2. 把 /tmp/dsl/packages/dsh-lamp 拷到 <profile>/vendor/dsh-lamp-bridge
+3. 改 <profile>/package.json：
+   - dsh.profile.bundles 里加上 "dsh-lamp-bridge"
+   - dependencies 里加 "dsh-lamp-bridge": "file:./vendor/dsh-lamp-bridge"
+4. 在 <profile> 里跑 pnpm install
+⚠️ 两个坑：插件的 package.json 必须声明 dsh.bundle.patch，
+   且它的 cordis.patch.yml 必须用 - insert: 包裹条目（裸 - id: 只会「修改已有」，
+   新增无效）。缺任何一条 DSH 都会静默跳过，日志里连插件名都不出现。
+
+装好后需要重启 DSH 才生效 —— 这会影响你正在进行的会话，动手前请先问我。
+
+重启后确认这行能返回 JSON：
+    curl -s http://127.0.0.1:3099/state
+
+最后告诉我可以填进状态灯的地址：
+    灯就在这台机器：http://127.0.0.1:3099/events
+    灯在另一台机器：http://<这台机器的局域网 IP>:3099/events
 
 注意：不要把 3099 暴露到公网，这个端口没有认证。
 """

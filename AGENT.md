@@ -1,136 +1,56 @@
-# 给 agent：安装「DSH 状态灯」的桥接插件
+# 仓库说明（给在这个仓库里干活的 agent）
 
-**目标**：在这台机器上把 `dsh-lamp-bridge` 插件装好，让它监听 `3099`，然后把一个
-可以填进状态灯客户端的地址告诉用户。
+这份文件不是安装指南 —— 用户装插件时用的是客户端里那个「复制提示词」，
+那段提示词本身是自给自足的。
 
-读完这份就能做完，不需要猜。
+留在这里的是**改这个插件时需要知道的两件事**，它们都踩过。
 
----
+## 一、插件要能被 DSH 加载，必须同时满足三条
 
-## 1. 先确认现状
+缺任何一条，DSH 都会**静默跳过**：不报错、日志里连插件名都不出现。
 
-```bash
-curl -s --max-time 3 http://127.0.0.1:3099/state
-```
+1. **包自己声明 bundle**
+   ```json
+   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } }
+   ```
+   只把名字写进 profile 的 `dsh.profile.bundles` 是不够的。
 
-- **返回 JSON 且有 `state` 字段** ⇒ 已经装好了，直接跳到第 4 步
-- 连接失败 ⇒ 继续第 2 步
+2. **patch 用 `insert:` 包裹**
+   ```yaml
+   - insert:                      # ← 必须
+       - id: dsh-lamp-bridge
+         name: 'dsh-lamp-bridge'
+   ```
+   裸的 `- id:` 是一条「修改已有条目」的 patch，对不存在的 id 会被丢弃。
 
-还要确认这个 JSON 里的 `source` 字段：`"plugin"` 表示是插件在跑，`"python"` 表示是老的
-Python 桥在跑。**如果用户要的是插件，`source` 不是 `plugin` 就说明还没换过来。**
+3. **在 profile 的 dependencies 里有 `file:` 声明**
+   ```json
+   "dsh-lamp-bridge": "file:./vendor/dsh-lamp-bridge"
+   ```
+   否则 pnpm 同步 `node_modules` 时会把这个「多余的包」删掉。
 
----
+## 二、客户端不能引 numpy
 
-## 2. 装插件
+`client/lamp.py` 只允许依赖 Pillow。呼吸灯的圆形蒙版一度用了 numpy，
+在没装它的机器上整个程序起不来（`ModuleNotFoundError`）。
+需要数组化的图像操作时，优先找 Pillow 的等价写法。
 
-### 方式 A：DSH 界面（有 Web UI 时最省事）
+同样的道理：`sys.stdout` / `sys.stderr` 在窗口模式打包后是 `None`，
+任何 `print()` 都会抛异常 —— `_ensure_std_streams()` 就是为此存在的。
 
-让用户在 **插件** 页面添加这个地址：
+## 三、验证清单
 
-```
-github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
-```
-
-### 方式 B：命令行改 profile（没有 UI，或 UI 装不上时）
-
-profile 一般在 `$DSH_HOME/profiles/web/`。
-
-**① 把插件放进 vendor 目录**
-
-```bash
-PROFILE=/root/.dsh/profiles/web          # 按实际 DSH_HOME 调整
-mkdir -p "$PROFILE/vendor"
-git clone --depth 1 https://github.com/oitsukiii/dsh-status-lamp /tmp/dsl
-cp -r /tmp/dsl/packages/dsh-lamp "$PROFILE/vendor/dsh-lamp-bridge"
-rm -rf "$PROFILE/vendor/dsh-lamp-bridge/node_modules"
-```
-
-**② 声明成依赖（必须用 `file:`，否则 pnpm 会去 npm registry 找，找不到会导致 DSH 起不来）**
+改完插件代码后：
 
 ```bash
-cd "$PROFILE"
-python3 - <<'PY'
-import json, pathlib
-p = pathlib.Path('package.json')
-d = json.loads(p.read_text())
-d.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
-if 'dsh-lamp-bridge' not in d['dsh']['profile']['bundles']:
-    d['dsh']['profile']['bundles'].append('dsh-lamp-bridge')
-d.setdefault('dependencies', {})['dsh-lamp-bridge'] = 'file:./vendor/dsh-lamp-bridge'
-p.write_text(json.dumps(d, ensure_ascii=False, indent=2) + '\n')
-PY
-pnpm install
+cd packages/dsh-lamp && ../../../dsh-*/node_modules/.bin/tsc --noEmit
 ```
 
-**③ 装完检查（这几项缺一项都不会加载，而且 DSH 不会报错）**
+改完客户端后：
 
 ```bash
-# 插件包必须自己在 package.json 里声明 dsh.bundle.patch
-python3 -c "import json;print(json.load(open('$PROFILE/vendor/dsh-lamp-bridge/package.json'))['dsh'])"
-# 期望：{'bundle': {'patch': './cordis.patch.yml'}}
-
-# 它自带的 patch 必须用 insert 包裹（裸 - id: 只会「修改已有条目」，新增无效）
-cat "$PROFILE/vendor/dsh-lamp-bridge/cordis.patch.yml"
-# 期望：
-#   - insert:
-#       - id: dsh-lamp-bridge
-#         name: 'dsh-lamp-bridge'
-#         config: { host: '0.0.0.0', port: 3099 }
+python3 -c "import ast;ast.parse(open('client/lamp.py').read(), feature_version=(3,9))"
 ```
 
-> ⚠️ 这两条是这个插件当初装不上的真正原因。缺了任何一条，DSH 会**静默跳过**，
-> 日志里连插件名都不会出现。
-
----
-
-## 3. 重启 DSH
-
-**动手前必须问用户** —— 重启会中断他正在进行的会话。
-
-```bash
-systemctl restart dsh-web      # 或者用户习惯的重启方式
-```
-
----
-
-## 4. 验证并回报
-
-```bash
-curl -s http://127.0.0.1:3099/state | python3 -m json.tool
-```
-
-应该看到：
-
-```json
-{
-  "state": "idle",
-  "source": "plugin",
-  "endpoint": "http://127.0.0.1:3099/events"
-}
-```
-
-**然后算出用户要填的地址：**
-
-| 状态灯在哪 | 填什么 |
-|---|---|
-| 和 DSH 同一台机器 | `http://127.0.0.1:3099/events` |
-| 另一台机器 | `http://<这台机器的局域网 IP>:3099/events` |
-
-**查局域网 IP：**
-
-```bash
-hostname -I | awk '{print $1}'          # Linux
-ipconfig                                # Windows
-```
-
-**最后把地址原样告诉用户。**
-
----
-
-## 5. 边界
-
-- **不要把 3099 暴露到公网** —— 这个端口没有任何认证，读到的是你 DSH 的实时状态
-- 局域网内网段可达就够了；确实要跨网访问，套 WireGuard 或 SSH 隧道
-- 不要改 DSH 的其他配置，只动这里列出的文件
-- Python 桥（`bridge/state_bridge.py`）是备选方案，见 `docs/python-bridge.md`；
-  **除非用户明确要求，否则用插件**
+**第二条是必须的** —— 嵌套 f-string（同引号）只有 Python 3.12+ 能解析，
+写的时候在自己机器上没事，到用户那里就是语法错误。
