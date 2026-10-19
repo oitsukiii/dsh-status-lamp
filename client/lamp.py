@@ -211,7 +211,7 @@ LAMP_H = 160       # 灯的高度（像素）；宽度按素材比例算
 
 # 呼吸灯：亮度在 BREATH_MIN..1.0 之间来回，走三角波
 BREATH_LEVELS = 30     # 亮度档数（越多越平滑；亮度帧惰性生成，不占启动时间）
-BREATH_MIN = 0.75      # 最暗 = 75%
+BREATH_MIN = 0.60      # 最暗 = 60%
 BREATH_STEP_MS = 45    # 每档停留毫秒（30 档 × 45ms ≈ 一个方向 1.35 秒）
 BREATH_HOLD_MS = 1000  # 到最亮后停留多久再往回落
 MARGIN = 8         # 四周留白
@@ -559,7 +559,7 @@ class Lamp:
             self.canvas.itemconfigure(self._item, image=photo)
 
     def _breath_tick(self) -> None:
-        """呼吸灯：三角波在 70%..100% 之间来回。
+        """呼吸灯：三角波在 BREATH_MIN..100% 之间来回，最亮处停一下。
 
         只换 canvas 上的图片引用，不重建 item，开销很低。
         """
