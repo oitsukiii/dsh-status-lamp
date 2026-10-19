@@ -94,7 +94,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "where_addr": "桥地址",
         "save_fail": "保存失败：{e}",
         # 右键菜单
-        "menu_refresh": "立刻刷新",
+        "menu_refresh": "立即刷新",
         "menu_reset": "回到右下角",
         "menu_topmost": "始终置顶",
         "menu_settings": "设置…",
