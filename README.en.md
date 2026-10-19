@@ -1,5 +1,11 @@
 # DSH Status Lamp
 
+![license](https://img.shields.io/badge/license-MIT-blue?style=flat-square)
+![platform](https://img.shields.io/badge/platform-Windows-0078D4?style=flat-square)
+![python](https://img.shields.io/badge/python-3.9%2B-yellow?style=flat-square)
+![dsh](https://img.shields.io/badge/DSH-plugin-orange?style=flat-square)
+![release](https://img.shields.io/badge/release-v1.1.0-brightgreen?style=flat-square)
+
 A traffic-light desktop widget for Windows, with a matching DSH plugin. One glance tells you what DSH is doing: yellow 🟡 while it works, red 🔴 when it needs you, green 🟢 when the turn is done. It can chime as well.
 
 No window switching, no log tailing. A glance out of the corner of your eye.
