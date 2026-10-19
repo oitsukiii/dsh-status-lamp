@@ -86,7 +86,23 @@ python client/lamp.py
 
 Right-click the lamp to open settings.
 
-#### LAN mode
+#### LAN mode, option A: the DSH plugin (recommended)
+
+If DSH runs on that machine, install it as a plugin — it starts and stops with
+DSH, so there is no process to manage:
+
+Add this in DSH's **Plugins** page:
+
+```
+github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
+```
+
+Restart DSH; it listens on `3099`. Point the lamp at `http://<that machine>:3099/events`.
+
+**This is noticeably faster than the Python bridge below**: the plugin subscribes
+to session events directly, with no file polling and no log decompression.
+
+#### LAN mode, option B: the Python bridge
 
 On the machine running DSH:
 

@@ -86,7 +86,21 @@ python client/lamp.py
 
 启动后右键灯可以打开设置。
 
-#### 局域网模式
+#### 局域网模式 · 方式 A：DSH 插件（推荐）
+
+如果 DSH 那台机器装了 DSH，可以直接装成插件 —— 随 DSH 启动，不用管进程：
+
+在 DSH 的「插件」页面添加：
+
+```
+github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp
+```
+
+装好重启 DSH，它会监听 `3099`，灯里填 `http://<那台机器>:3099/events` 即可。
+
+**这个方式比下面的 Python 桥快得多**：插件直接订阅会话事件，不轮询文件、不解压日志。
+
+#### 局域网模式 · 方式 B：Python 桥
 
 在 **DSH 所在的那台机器**上：
 
