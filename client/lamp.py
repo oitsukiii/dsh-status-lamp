@@ -158,7 +158,7 @@ DEFAULT_CONFIG = {
 }
 
 
-def default_home_display() -> str:
+def default_home_display(mask: str = "<用户名>") -> str:
     """把默认 DSH 目录里的真实用户名换成 <用户名> 占位符。
 
     既让小白看得懂（给出具体形态），又不会在截图上泄漏用户名。
@@ -174,7 +174,7 @@ def default_home_display() -> str:
     # 在 Linux 上处理 "C:\Users\x" 会返回空串。按字符串里的分隔符判断更稳。
     sep = "\\" if "\\" in home else "/"
     parent = home.rsplit(sep, 1)[0]
-    masked = parent + sep + "<用户名>"
+    masked = parent + sep + mask
     return masked + real[len(home):]
 
 
@@ -243,15 +243,7 @@ PALETTE = {
     "working":   {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},
 }
 
-LABEL = {
-    "question":  "等你回答",
-    "retrying":  "重试中",
-    "tool":      "调工具",
-    "thinking":  "思考中",
-    "done":      "完成",
-    "idle":      "空闲",
-    "working":   "工作中",
-}
+# 状态标签在 i18n 里，用 t(f"state_{state}", lang) 取（之前在模块级写死中文，# 英文模式下会漏出来）
 
 
 def fetch_state(url: str, timeout: float = 2.0) -> dict:
@@ -754,7 +746,7 @@ class Lamp:
 
         tk.Button(row, text=t("browse", L), command=_browse).pack(side="left", padx=(6, 0))
         tk.Label(local_box, justify="left", wraplength=540, fg="#888", font=("", 8),
-                 text=t("default_hint", L, path=default_home_display())).pack(
+                 text=t("default_hint", L, path=default_home_display(t("user_placeholder", L)))).pack(
             anchor="w", padx=12, pady=(3, 6))
 
         local_test_row = tk.Frame(local_box)
@@ -1153,11 +1145,11 @@ class Lamp:
         if state not in PALETTE:
             state = "idle"          # 未知状态一律按空闲处理（灯全灭）
 
-        bits = [LABEL[state]]
+        bits = [t(f"state_{state}", self.lang)]
         # 红灯要区分「等你允许（审批）」和「等你回答（提问）」
         if state == "question":
-            bits[0] = ("等你允许" if data.get("attention_reason") == "approval"
-                       else "等你回答")
+            bits[0] = t("attention_approval" if data.get("attention_reason") == "approval"
+                        else "attention_question", self.lang)
         # 调工具时把工具名也显示出来，这是信息量最大的一项
         if state == "tool" and data.get("tool"):
             bits[-1] = f"{LABEL[state]} · {data['tool']}"
