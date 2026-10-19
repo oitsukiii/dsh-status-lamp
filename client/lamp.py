@@ -889,13 +889,6 @@ class Lamp:
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
-        def _fit_height() -> None:
-            try:
-                dlg.update_idletasks()
-                dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
-            except Exception:
-                pass
-
         # ── 灯语说明 ──
         def _show_lamp_language() -> None:
             d = tk.Toplevel(dlg)
