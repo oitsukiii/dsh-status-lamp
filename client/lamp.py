@@ -654,16 +654,34 @@ class Lamp:
 
     def open_settings(self) -> None:
         """设置窗口：选模式后只显示该模式的配置，测试按钮也各在各的面板里。"""
+        existing = getattr(self, "_settings_dlg", None)
+        if existing is not None:
+            try:
+                if existing.winfo_exists():
+                    existing.deiconify()
+                    existing.lift()
+                    existing.focus_force()
+                    return
+            except Exception:
+                pass
+            self._settings_dlg = None
         dlg = tk.Toplevel(self.root)
         L = self.lang
         dlg.title(t("settings_title", L))
         # 宽高都先不定，等 pack 完按内容量一次
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
-        # 模态：不关掉它就不能操作别的窗口（否则能同时开出好几个设置窗）
+        # ⚠️ 不能用 grab_set()：它会把整个应用的输入都截给这个对话框，
+        # 灯就既拖不动、也点不出右键菜单了。灯是个常驻小挂件，那个代价太大。
+        # 这里只做「不重复打开」：已经开着就抬到前面。
+        self._settings_dlg = dlg
         dlg.transient(self.root)
-        dlg.grab_set()
-        dlg.protocol("WM_DELETE_WINDOW", lambda: (dlg.grab_release(), dlg.destroy()))
+
+        def _close_settings() -> None:
+            self._settings_dlg = None
+            dlg.destroy()
+
+        dlg.protocol("WM_DELETE_WINDOW", _close_settings)
 
         mode = tk.StringVar(value=self.cfg.get("mode", "local"))
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
@@ -989,16 +1007,21 @@ class Lamp:
             # 宽高都交给内容决定（下面 pack 完再量一次）
             d.attributes("-topmost", True)
             d.resizable(False, False)
-            # 父窗口已经 grab 了，子窗口必须自己再 grab 一次，否则点不动
             d.transient(dlg)
-            d.grab_set()
-
-            def _close() -> None:
+            prev = getattr(self, "_lang_dlg", None)
+            if prev is not None:
                 try:
-                    d.grab_release()
-                    dlg.grab_set()      # 把模态交还给设置窗口
+                    if prev.winfo_exists():
+                        prev.lift()
+                        prev.focus_force()
+                        d.destroy()
+                        return
                 except Exception:
                     pass
+            self._lang_dlg = d
+
+            def _close() -> None:
+                self._lang_dlg = None
                 d.destroy()
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
                 anchor="w", padx=18, pady=(16, 10))
@@ -1050,7 +1073,7 @@ class Lamp:
         tk.Button(bar, text=t("lang_btn", L),
                   command=_show_lamp_language).pack(side="left")
         tk.Button(bar, text=t("cancel", L),
-                  command=lambda: (dlg.grab_release(), dlg.destroy())).pack(side="right")
+                  command=_close_settings).pack(side="right")
         tk.Button(bar, text=t("save", L), command=_save).pack(side="right", padx=8)
 
         _apply_mode()
