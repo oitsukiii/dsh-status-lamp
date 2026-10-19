@@ -164,14 +164,8 @@ REPO_URL = "https://github.com/<你的用户名>/dsh-status-lamp"
 PROJECT_ADDR = "github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp"
 
 # 给 agent 的提示词 —— 让它在 DSH 那台机器上把插件装好并回报地址
-AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接插件，并把地址告诉我。
+AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接插件，并把配置地址告诉我：
 
-插件地址（在 DSH 的「插件」页添加）：
-{PROJECT_ADDR}
-
-【如果是我自己在插件页点】装完提醒我重启 DSH 即可，你不用动。
-
-【如果你要自己动手装】（我没法操作界面，或插件页装失败时）：
 1. git clone --depth 1 https://github.com/oitsukiii/dsh-status-lamp /tmp/dsl
 2. 把 /tmp/dsl/packages/dsh-lamp 拷到 <profile>/vendor/dsh-lamp-bridge
    （profile 一般在 $DSH_HOME/profiles/web/）
@@ -188,11 +182,12 @@ AGENT_PROMPT = """请帮我在这台机器上装好「DSH 状态灯」的桥接�
 重启后确认这行能返回 JSON：
     curl -s http://127.0.0.1:3099/state
 
-最后告诉我可以填进状态灯的地址：
-    灯就在这台机器：http://127.0.0.1:3099/events
-    灯在另一台机器：http://<这台机器的局域网 IP>:3099/events
+最后告诉我插件配置地址：
+    http://<这台机器的局域网 IP>:3099/events
 
-注意：不要把 3099 暴露到公网，这个端口没有认证。
+注意：
+1. 不要把 3099 暴露到公网，这个端口没有认证。
+2. git clone 时配置一个计时器，超时的话寻找国内镜像，或询问我是否有代理。
 """
 
 # 「复制给 agent」的内容：一段可以直接发给 DSH 的提示词
@@ -834,7 +829,7 @@ class Lamp:
 
         def _copy_prompt() -> None:
             self.root.clipboard_clear()
-            self.root.clipboard_append(AGENT_PROMPT.format(PROJECT_ADDR=PROJECT_ADDR))
+            self.root.clipboard_append(AGENT_PROMPT)
             status.configure(text=t("copied_prompt", L), fg=OK)
 
         tk.Button(box, text=t("bridge_auto_btn", L), command=_copy_prompt).pack(
