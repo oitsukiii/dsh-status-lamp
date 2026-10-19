@@ -793,12 +793,17 @@ class Lamp:
         box = tk.LabelFrame(dlg, text=t("frame_bridge", L))
         box.pack(fill="x", padx=14, pady=(12, 0))
 
-        # 地址 + 测试（放最上面）
-        ent = tk.Entry(box, textvariable=server, width=52)
-        ent.pack(anchor="w", padx=12, pady=(10, 4))
+        # 标题（粗体，框内第一行）
+        tk.Label(box, text=t("bridge_title", L), font=("", 11, "bold")).pack(
+            anchor="w", padx=12, pady=(8, 4))
 
+        # 地址栏
+        ent = tk.Entry(box, textvariable=server, width=52)
+        ent.pack(anchor="w", padx=12)
+
+        # 测试连接
         test_row = tk.Frame(box)
-        test_row.pack(anchor="w", padx=12, pady=(0, 8))
+        test_row.pack(anchor="w", padx=12, pady=(6, 10))
         conn_result = tk.Label(test_row, text="", font=("", 9), width=10, anchor="w")
 
         def _base() -> str:
@@ -815,17 +820,32 @@ class Lamp:
         tk.Button(test_row, text=t("test_conn", L), command=_test_conn).pack(side="left")
         conn_result.pack(side="left", padx=(10, 0))
 
+        tk.Frame(box, height=1, bg="#d8d8d3").pack(fill="x", padx=12)
+
         # 这是什么？
         tk.Label(box, text=t("bridge_intro_title", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=12, pady=(6, 0))
+            anchor="w", padx=12, pady=(10, 2))
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
-                 text=t("bridge_intro", L)).pack(anchor="w", padx=12, pady=(2, 8))
+                 text=t("bridge_intro", L)).pack(anchor="w", padx=12)
 
-        # 如何获得 IP？
+        # 连本机 / 连其他设备 —— 标签和 URL 各自成行
+        tk.Label(box, justify="left", fg="#555", font=("", 9),
+                 text=t("bridge_local_label", L)).pack(anchor="w", padx=12, pady=(6, 0))
+        tk.Label(box, text=t("bridge_local_url", L), font=("Consolas", 9)).pack(
+            anchor="w", padx=26)
+        tk.Label(box, justify="left", fg="#555", font=("", 9),
+                 text=t("bridge_remote_label", L)).pack(anchor="w", padx=12, pady=(4, 0))
+        tk.Label(box, text=t("bridge_remote_url", L), font=("Consolas", 9)).pack(
+            anchor="w", padx=26, pady=(0, 10))
+
+        tk.Frame(box, height=1, bg="#d8d8d3").pack(fill="x", padx=12)
+
+        # 如何获得？
         tk.Label(box, text=t("bridge_auto_title", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=12, pady=(4, 0))
+            anchor="w", padx=12, pady=(10, 2))
+
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
-                 text=t("bridge_auto", L)).pack(anchor="w", padx=12, pady=(2, 4))
+                 text=t("bridge_auto", L)).pack(anchor="w", padx=12, pady=(0, 4))
 
         def _copy_prompt() -> None:
             self.root.clipboard_clear()
@@ -835,7 +855,7 @@ class Lamp:
         tk.Button(box, text=t("bridge_auto_btn", L), command=_copy_prompt).pack(
             anchor="w", padx=12, pady=(0, 10))
 
-        # 手动方式
+        # 手动配置
         tk.Label(box, justify="left", wraplength=520, fg="#555", font=("", 9),
                  text=t("bridge_manual", L)).pack(anchor="w", padx=12, pady=(0, 4))
 

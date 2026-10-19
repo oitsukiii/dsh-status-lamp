@@ -65,17 +65,21 @@ STRINGS: dict[str, dict[str, str]] = {
         "attention_approval": "等你允许",
         "attention_question": "等你回答",
         "user_placeholder": "<用户名>",
-        "frame_bridge": " 桥接插件地址 ",
+        "frame_bridge": " ",
+        "bridge_title": "桥接插件地址",
         "bridge_intro_title": "这是什么？",
-        "bridge_intro": "本状态灯需要同时安装 DSH 插件 dsh-status-lamp 作为桥接器，这里填的是桥接器的地址。\n"
-                         "如果 DSH 和本状态灯在同一台机器上，直接填 http://127.0.0.1:3099/events\n"
-                         "如果不在同一机器上，填 http://<DSH 所在设备的局域网 IP>:3099/events",
+        "bridge_intro": "本状态灯需要同时安装 DSH 插件 dsh-status-lamp 作为桥接器，这里填的是桥接器的地址。",
+        "bridge_local_label": "连本机 DSH 填：",
+        "bridge_local_url": "http://127.0.0.1:3099/events",
+        "bridge_remote_label": "连其他设备的 DSH 填：",
+        "bridge_remote_url": "http://<DSH 所在设备的局域网 IP>:3099/events",
         "bridge_manual_title": "如何获得这个地址？（手动方式）",
-        "bridge_manual": "（手动方式）点击下面的「复制本项目地址」→ 到 DSH → 插件 → 添加插件 → 粘贴本项目地址 → 安装。\n"
-                         "重启 DSH 后，在上面填写 http://<DSH 所在设备的局域网 IP>:3099/events",
+        "bridge_manual": "【手动配置】点击下面的按钮复制本项目地址 → 到 DSH → 插件 → 添加插件 → 粘贴本项目地址 → 安装。\n"
+                         "重启 DSH 后，在上面填写：\n"
+                         "http://<DSH 所在设备的局域网 IP>:3099/events",
         "bridge_manual_btn": "本项目地址",
         "bridge_auto_title": "如何获得 <DSH 所在设备的局域网 IP> ？",
-        "bridge_auto": "（让 agent 代劳，推荐）点击下面的「复制提示词」→ 发给你的 DSH → agent 会给你一个地址。\n"
+        "bridge_auto": "【让 agent 代劳，推荐】点击下面的按钮复制提示词 → 发给你的 dsh → agent 会给你一个地址。\n"
                        "重启 DSH 后，把地址粘贴到上面。",
         "bridge_auto_btn": "复制提示词",
         "copied_addr": "已复制项目地址",
@@ -163,17 +167,21 @@ STRINGS: dict[str, dict[str, str]] = {
         "attention_approval": "Waiting for allow",
         "attention_question": "Waiting for an answer",
         "user_placeholder": "<user>",
-        "frame_bridge": " Bridge plugin address ",  
+        "frame_bridge": " ",
+        "bridge_title": "Bridge plugin address",
         "bridge_intro_title": "What is this?",
-        "bridge_intro": "The lamp needs the DSH plugin dsh-status-lamp installed as its bridge. This field is that bridge's address.\n"
-                         "If DSH and the lamp are on the same machine, enter http://127.0.0.1:3099/events\n"
-                         "If they are not, enter http://<DSH host LAN IP>:3099/events",
+        "bridge_intro": "The lamp needs the DSH plugin dsh-status-lamp installed as its bridge. This field is that bridge's address.",
+        "bridge_local_label": "Connecting to a DSH on this machine:",
+        "bridge_local_url": "http://127.0.0.1:3099/events",
+        "bridge_remote_label": "Connecting to a DSH on another device:",
+        "bridge_remote_url": "http://<DSH host LAN IP>:3099/events",
         "bridge_manual_title": "How do I get it? (by hand)",
-        "bridge_manual": "(By hand) Press \"Copy project address\", then in DSH: Plugins -> Add plugin -> paste -> install.\n"
-                         "After restarting DSH, enter http://<DSH host LAN IP>:3099/events above.",
+        "bridge_manual": "[By hand] Press the button below to copy this project's address, then in DSH: Plugins -> Add plugin -> paste -> install.\n"
+                         "After restarting DSH, enter:\n"
+                         "http://<DSH host LAN IP>:3099/events",
         "bridge_manual_btn": "Project address",
         "bridge_auto_title": "How do I get the <DSH host LAN IP>?",
-        "bridge_auto": "(Let the agent do it -- recommended) Press \"Copy prompt\" and send it to your DSH. The agent replies with an address.\n"
+        "bridge_auto": "[Let the agent do it -- recommended] Press the button below to copy a prompt, send it to your dsh, and the agent replies with an address.\n"
                        "After restarting DSH, paste it above.",
         "bridge_auto_btn": "Copy prompt",
         "copied_addr": "Project address copied",
