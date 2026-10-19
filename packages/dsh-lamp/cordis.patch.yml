@@ -1,6 +1,10 @@
 # DSH 状态灯的桥。监听会话事件，折叠成四色，走 HTTP + SSE 给桌面小挂件。
-- id: dsh-lamp-bridge
-  name: 'dsh-lamp-bridge'
-  config:
-    host: '0.0.0.0'
-    port: 3099
+#
+# ⚠️ 必须用 `insert:` 包裹：裸的 `- id:` 是一条「修改已有条目」的 patch，
+#    对不存在的 id 会被静默忽略 —— 插件根本不会进树。
+- insert:
+    - id: dsh-lamp-bridge
+      name: 'dsh-lamp-bridge'
+      config:
+        host: '0.0.0.0'
+        port: 3099
