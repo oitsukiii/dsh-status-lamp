@@ -390,6 +390,8 @@ class Lamp:
 
     def _start_backend(self) -> None:
         """按配置起后端：本机读文件 / 局域网连桥。"""
+        # 现在只有「连桥」一种数据源：本机直读文件那套已经去掉。
+        self.cfg["mode"] = "lan"
         if self._backend is not None:
             self._backend.stop()
         self._backend = make_backend(self.cfg, self._q.put)
@@ -676,7 +678,7 @@ class Lamp:
         self.menu.tk_popup(ev.x_root, ev.y_root)
 
     def open_settings(self) -> None:
-        """设置窗口：选模式后只显示该模式的配置，测试按钮也各在各的面板里。"""
+        """设置窗口：只需要一个桥地址，其余都是开关。"""
         existing = getattr(self, "_settings_dlg", None)
         if existing is not None:
             try:
@@ -688,15 +690,14 @@ class Lamp:
             except Exception:
                 pass
             self._settings_dlg = None
+
         dlg = tk.Toplevel(self.root)
         L = self.lang
         dlg.title(t("settings_title", L))
-        # 宽高都先不定，等 pack 完按内容量一次
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
         # ⚠️ 不能用 grab_set()：它会把整个应用的输入都截给这个对话框，
-        # 灯就既拖不动、也点不出右键菜单了。灯是个常驻小挂件，那个代价太大。
-        # 这里只做「不重复打开」：已经开着就抬到前面。
+        # 灯就既拖不动、也点不出右键菜单了。
         self._settings_dlg = dlg
         dlg.transient(self.root)
 
@@ -706,9 +707,9 @@ class Lamp:
 
         dlg.protocol("WM_DELETE_WINDOW", _close_settings)
 
-        mode = tk.StringVar(value=self.cfg.get("mode", "local"))
+        OK, BAD = "#2a7", "#c33"
+
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
-        dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home") or dsh_home())
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
         breath = tk.BooleanVar(value=bool(self.cfg.get("breath", True)))
         SIZE_LABELS = [("small", t("size_small", self.lang)),
@@ -717,8 +718,6 @@ class Lamp:
         cur_size = self.cfg.get("size", "medium")
         cur_label = next((lab for k, lab in SIZE_LABELS if k == cur_size),
                          t("size_medium", self.lang))
-
-        OK, BAD, WARN = "#2a7", "#c33", "#c80"
 
         # ── 语言 ──
         lang_row = tk.Frame(dlg)
@@ -730,7 +729,6 @@ class Lamp:
         lang_cb.pack(side="left", padx=(8, 0))
 
         def _on_lang(_evt=None) -> None:
-            """换语言：存起来、重建菜单、把这个窗口重开一遍（不然文字换不掉）。"""
             picked = [k for k in LANGS if LANG_NAMES[k] == lang_var.get()]
             if not picked or picked[0] == self.lang:
                 return
@@ -741,79 +739,24 @@ class Lamp:
             except OSError:
                 pass
             self._rebuild_menu()
-            dlg.destroy()
+            _close_settings()
             self.open_settings()
 
         lang_cb.bind("<<ComboboxSelected>>", _on_lang)
 
-        # ── 数据来源 ──
-        tk.Label(dlg, text=t("data_source", L), font=("", 10, "bold")).pack(
-            anchor="w", padx=14, pady=(12, 4))
-        tk.Radiobutton(dlg, text=t("mode_local", L),
-                       variable=mode, value="local",
-                       command=lambda: _apply_mode()).pack(anchor="w", padx=24)
-        tk.Radiobutton(dlg, text=t("mode_lan", L),
-                       variable=mode, value="lan",
-                       command=lambda: _apply_mode()).pack(anchor="w", padx=24)
-
-        mode_area = tk.Frame(dlg)
-        mode_area.pack(fill="x", pady=(8, 0))
-
-        # ── 本机模式 ──
-        local_box = tk.LabelFrame(mode_area, text=t("frame_local", L))
-        tk.Label(local_box, text=t("dsh_dir", L)).pack(anchor="w", padx=10, pady=(8, 2))
-        row = tk.Frame(local_box)
-        row.pack(anchor="w", padx=12)
-        home_ent = tk.Entry(row, textvariable=dsh_home_var, width=46)
-        home_ent.pack(side="left")
-
-        def _browse() -> None:
-            from tkinter import filedialog
-            picked = filedialog.askdirectory(
-                title=t("browse_title", L),
-                initialdir=dsh_home_var.get() or dsh_home())
-            if picked:
-                dsh_home_var.set(picked)
-
-        tk.Button(row, text=t("browse", L), command=_browse).pack(side="left", padx=(6, 0))
-        tk.Label(local_box, justify="left", wraplength=540, fg="#888", font=("", 8),
-                 text=t("default_hint", L, path=default_home_display(t("user_placeholder", L)))).pack(
-            anchor="w", padx=12, pady=(3, 6))
-
-        local_test_row = tk.Frame(local_box)
-        local_test_row.pack(anchor="w", padx=12, pady=(0, 10))
-        # width 8 + anchor=w：预先占好位置，文字出现/消失都不会挤动按钮
-        local_result = tk.Label(local_test_row, text="", font=("", 9),
-                                width=8, anchor="w")
-        # 注意顺序：按钮先 pack ⇒ 在左；结果后 pack ⇒ 在右
-
-        def _test_read_local() -> None:
-            try:
-                set_dsh_home(dsh_home_var.get().strip())
-                from dsh_lamp.state import read_state
-                st = read_state(None)
-                if st.get("state"):
-                    local_result.configure(text=t("read_ok", L), fg=OK)
-                else:
-                    local_result.configure(text=t("read_fail", L), fg=BAD)
-            except Exception:
-                local_result.configure(text=t("read_fail", L), fg=BAD)
-
-        tk.Button(local_test_row, text=t("test_read", L), command=_test_read_local).pack(side="left")
-        local_result.pack(side="left", padx=(10, 0))
-
-        # ── 局域网模式 ──
-        lan_box = tk.LabelFrame(mode_area, text=t("frame_lan", L))
-        tk.Label(lan_box, text=t("bridge_addr", L)).pack(anchor="w", padx=10, pady=(8, 2))
-        ent = tk.Entry(lan_box, textvariable=server, width=56)
+        # ── 桥地址 ──
+        box = tk.LabelFrame(dlg, text=t("frame_bridge", L))
+        box.pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(box, text=t("bridge_addr", L)).pack(anchor="w", padx=10, pady=(8, 2))
+        ent = tk.Entry(box, textvariable=server, width=52)
         ent.pack(anchor="w", padx=12)
+        tk.Label(box, justify="left", wraplength=520, fg="#888", font=("", 9),
+                 text=t("bridge_hint", L)).pack(anchor="w", padx=12, pady=(4, 6))
 
-        lan_test_row = tk.Frame(lan_box)
-        lan_test_row.pack(anchor="w", padx=12, pady=(8, 2))
-        conn_result = tk.Label(lan_test_row, text="", font=("", 9),
-                               width=8, anchor="w")
-        read_result = tk.Label(lan_test_row, text="", font=("", 9),
-                               width=8, anchor="w")
+        test_row = tk.Frame(box)
+        test_row.pack(anchor="w", padx=12, pady=(0, 8))
+        conn_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
+        read_result = tk.Label(test_row, text="", font=("", 9), width=8, anchor="w")
 
         def _lan_base() -> str:
             return server.get().strip().rsplit("/", 1)[0]
@@ -826,7 +769,7 @@ class Lamp:
             except Exception:
                 conn_result.configure(text=t("conn_fail", L), fg=BAD)
 
-        def _test_read_lan() -> None:
+        def _test_read() -> None:
             try:
                 with urllib.request.urlopen(_lan_base() + "/state", timeout=4) as r:
                     data = json.loads(r.read().decode("utf-8"))
@@ -837,16 +780,16 @@ class Lamp:
             except Exception:
                 read_result.configure(text=t("read_fail", L), fg=BAD)
 
-        tk.Button(lan_test_row, text=t("test_conn", L), command=_test_conn).pack(side="left")
-        conn_result.pack(side="left", padx=(8, 4))
-        tk.Button(lan_test_row, text=t("test_read", L), command=_test_read_lan).pack(side="left")
+        tk.Button(test_row, text=t("test_conn", L), command=_test_conn).pack(side="left")
+        conn_result.pack(side="left", padx=(8, 14))
+        tk.Button(test_row, text=t("test_read", L), command=_test_read).pack(side="left")
         read_result.pack(side="left", padx=(8, 0))
 
-        guide = tk.LabelFrame(lan_box, text=t("no_bridge", L))
-        guide.pack(fill="x", padx=12, pady=(8, 10))
-        tk.Label(guide, justify="left", wraplength=500, fg="#555",
-                 text=t("copy_hint", L)).pack(
-            anchor="w", padx=10, pady=(6, 4))
+        # ── 怎么拿到地址 ──
+        guide = tk.LabelFrame(box, text=t("no_bridge", L))
+        guide.pack(fill="x", padx=12, pady=(0, 10))
+        tk.Label(guide, justify="left", wraplength=470, fg="#555",
+                 text=t("copy_hint", L)).pack(anchor="w", padx=10, pady=(6, 4))
 
         def _copy_prompt() -> None:
             self.root.clipboard_clear()
@@ -856,69 +799,7 @@ class Lamp:
         tk.Button(guide, text=t("copy_btn", L), command=_copy_prompt).pack(
             anchor="w", padx=10, pady=(0, 8))
 
-
-        # ── 解码器 ──
-        dep_box = tk.LabelFrame(dlg, text=t("dep_frame", L))
-        dep_box.pack(fill="x", padx=14, pady=(10, 0))
-        dep = tk.Frame(dep_box)
-        dep.pack(anchor="w", fill="x", padx=8, pady=(6, 0))
-        dep_label = tk.Label(dep, justify="left", wraplength=400, font=("", 9))
-        dep_label.pack(side="left", anchor="w")
-        # tkinter 的 Label 不能调行距，所以拆成两行 Label 分别控 pady
-        why_box = tk.Frame(dep_box)
-        why_line1 = tk.Label(why_box, justify="left", fg="#999", font=("", 9),
-                             text=t("why1", L))
-        why_line1.pack(anchor="w", pady=(0, 5))
-        why_line2 = tk.Label(why_box, justify="left", fg="#999", font=("", 9),
-                             text=t("why2", L))
-        why_line2.pack(anchor="w", pady=(0, 0))
-
-        def _refresh_dep() -> None:
-            from dsh_lamp.event_tail import decompressor_kind
-            kind = decompressor_kind()
-            installed = kind != "none"
-            install_btn.pack_forget()
-            dep_label.pack_forget()
-            install_btn.configure(
-                text=t("dep_reinstall", L) if installed else t("dep_install", L))
-            install_btn.pack(side="left", anchor="w")
-            dep_label.configure(fg=OK if installed else WARN,
-                                text=t("dep_installed", L) if installed else t("dep_missing", L))
-            dep_label.pack(side="left", anchor="w", padx=(10, 0))
-            why_box.pack(anchor="w", padx=8, pady=(8, 10))
-
-        def _one_click_install() -> None:
-            install_btn.configure(state="disabled", text="安装中…")
-            dep_label.configure(fg="#888", text=t("dep_installing", L))
-
-            def work() -> None:
-                ok, msg = False, ""
-                try:
-                    proc = subprocess.run(
-                        [sys.executable, "-m", "pip", "install", "pyzstd"],
-                        capture_output=True, text=True, timeout=240)
-                    ok = proc.returncode == 0
-                    if not ok:
-                        tail = (proc.stderr or proc.stdout or "").strip().splitlines()
-                        msg = tail[-1][:140] if tail else f"退出码 {proc.returncode}"
-                except Exception as exc:
-                    msg = exc.__class__.__name__
-                self.post(lambda: done(ok, msg))
-
-            def done(ok: bool, msg: str) -> None:
-                install_btn.configure(state="normal")
-                if ok:
-                    _refresh_dep()
-                    status.configure(text=t("dep_done", L), fg=OK)
-                else:
-                    dep_label.configure(fg=BAD, text=t("dep_failed", L, msg=msg))
-                    status.configure(text=t("dep_manual", L), fg=BAD)
-
-            threading.Thread(target=work, daemon=True).start()
-
-        install_btn = tk.Button(dep, text=t("dep_install", L), command=_one_click_install)
-
-        # ── 最下面 ──
+        # ── 开关 ──
         tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
             anchor="w", padx=14, pady=(12, 0))
         tk.Checkbutton(dlg, text=t("breath", L), variable=breath).pack(
@@ -930,110 +811,21 @@ class Lamp:
         size_var = tk.StringVar(value=cur_label)
         ttk.Combobox(size_row, textvariable=size_var, state="readonly", width=8,
                      values=[lab for _, lab in SIZE_LABELS]).pack(side="left", padx=(8, 0))
+
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
         def _fit_height() -> None:
-            """把窗口高度收到刚好包住内容。
-
-            模式切换会改变内容高度（局域网多一个「复制指令」框），
-            所以每次切换都要重算。
-            """
             try:
                 dlg.update_idletasks()
                 dlg.geometry(f"{dlg.winfo_reqwidth()}x{dlg.winfo_reqheight()}")
             except Exception:
                 pass
 
-        # ── 模式切换 ──
-        def _apply_mode() -> None:
-            if mode.get() == "local":
-                lan_box.pack_forget()
-                local_box.pack(fill="x", padx=14, pady=(6, 0))
-            else:
-                local_box.pack_forget()
-                lan_box.pack(fill="x", padx=14, pady=(6, 0))
-            dlg.after_idle(_fit_height)
-
-        # ── 保存 ──
-        def _save() -> None:
-            """保存配置、重启后端，然后【异步】验证一次。
-
-            ⚠️ 「保存成功」和「连接成功」是两件事 —— 配置写进磁盘一定成功，
-            但地址可能填错、桥可能没起。两者必须分开报告，否则用户会以为
-            自己已经连上了。
-            """
-            picked = dsh_home_var.get().strip()
-            # 防止把界面上的占位符（<用户名> / <user>）当成真路径存下去 ——
-            # 一旦存进去，dsh_home() 会一直返回它，然后就再也读不到数据了。
-            if "<" in picked or ">" in picked:
-                status.configure(
-                    text="路径里还有尖括号占位符，请点「浏览…」选真实目录", fg=BAD)
-                return
-            try:
-                same = (os.path.normcase(os.path.normpath(picked))
-                        == os.path.normcase(os.path.normpath(default_dsh_home())))
-            except Exception:
-                same = False
-            self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
-                             "dsh_home": "" if same else picked,
-                             "sound": bool(sound.get()),
-                             "breath": bool(breath.get()),
-                             "size": next((k for k, lab in SIZE_LABELS
-                                           if lab == size_var.get()), "medium")})
-            self.url = self.cfg["server"]
-            set_dsh_home(self.cfg["dsh_home"])
-            try:
-                save_config(self.cfg)
-            except OSError as e:
-                status.configure(text=t("save_fail", L, e=e), fg=BAD)
-                return
-
-            # 配置已落盘 ⇒ 这一步是确定的
-            self._n_push = 0
-            self.apply_size(self.cfg.get("size", "medium"))
-            self._start_backend()
-            status.configure(text=t("saved_verifying", L), fg="#888")
-
-            use_local = mode.get() == "local"
-            target = self.cfg["server"]
-
-            def verify() -> None:
-                ok, detail = False, ""
-                if use_local:
-                    try:
-                        from dsh_lamp.state import read_state
-                        st = read_state(None)
-                        ok = bool(st.get("state"))
-                        detail = str(st.get("state", ""))
-                    except Exception as exc:
-                        detail = exc.__class__.__name__
-                else:
-                    try:
-                        base = target.rsplit("/", 1)[0]
-                        with urllib.request.urlopen(base + "/state", timeout=5) as r:
-                            data = json.loads(r.read().decode("utf-8"))
-                        ok = bool(data.get("state"))
-                        detail = str(data.get("state", ""))
-                    except Exception as exc:
-                        detail = exc.__class__.__name__
-                self.post(lambda: report(ok, detail))
-
-            def report(ok: bool, detail: str) -> None:
-                if ok:
-                    status.configure(text=t("saved_ok", L, s=detail), fg=OK)
-                else:
-                    where = t("where_dir", L) if use_local else t("where_addr", L)
-                    status.configure(
-                        text=t("saved_fail", L, e=detail, where=where), fg=BAD)
-
-            threading.Thread(target=verify, daemon=True).start()
-
+        # ── 灯语说明 ──
         def _show_lamp_language() -> None:
-            """灯语说明 —— 四色各是什么意思。"""
             d = tk.Toplevel(dlg)
             d.title(t("lang_title", L))
-            # 宽高都交给内容决定（下面 pack 完再量一次）
             d.attributes("-topmost", True)
             d.resizable(False, False)
             d.transient(dlg)
@@ -1052,9 +844,9 @@ class Lamp:
             def _close() -> None:
                 self._lang_dlg = None
                 d.destroy()
+
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
                 anchor="w", padx=18, pady=(16, 10))
-
             rows = [
                 ("attention", "#e74c3c", t("lang_red", L),    t("lang_red_h", L),
                  [t("lang_red_1", L), t("lang_red_2", L)]),
@@ -1065,20 +857,16 @@ class Lamp:
                 ("idle",      "#9a9a94", t("lang_off", L),    t("lang_off_h", L),
                  [t("lang_off_1", L), t("lang_off_2", L)]),
             ]
-            # 缩略图要保留引用，否则会被 GC 回收成空白
             d._thumbs = []
             for sprite, color, label, head, details in rows:
                 row = tk.Frame(d)
                 row.pack(anchor="w", fill="x", padx=18, pady=(6, 10))
-
-                # 左侧：灯的实际样子（合成到白色背景上）
                 thumb = self._sprite_thumb(sprite, self.px(68))
                 if thumb is not None:
                     tk.Label(row, image=thumb, bg="white",
                              borderwidth=1, relief="solid").pack(
                         side="left", anchor="n", padx=(0, 14))
                     d._thumbs.append(thumb)
-
                 col = tk.Frame(row)
                 col.pack(side="left", anchor="n", fill="x", expand=True)
                 head_row = tk.Frame(col)
@@ -1088,27 +876,70 @@ class Lamp:
                          font=("", 10, "bold")).pack(side="left")
                 for line in details:
                     tk.Label(col, text=f"· {line}", fg="#555", font=("", 9)).pack(anchor="w")
-            tk.Button(d, text=t("close", L), command=_close).pack(
-                side="bottom", pady=14)
 
-            # 宽高都按内容收（写死任何一个都会在别的 DPI / 字体 / 语言下留空白）
+            tk.Button(d, text=t("close", L), command=_close).pack(side="bottom", pady=14)
             d.protocol("WM_DELETE_WINDOW", _close)
             d.update_idletasks()
             d.geometry(f"{d.winfo_reqwidth()}x{d.winfo_reqheight()}")
             self._center(d)
 
+        # ── 保存 ──
+        def _save() -> None:
+            picked_url = server.get().strip()
+            if not picked_url:
+                status.configure(text=t("need_addr", L), fg=BAD)
+                return
+            self.cfg.update({"server": picked_url,
+                             "sound": bool(sound.get()),
+                             "breath": bool(breath.get()),
+                             "size": next((k for k, lab in SIZE_LABELS
+                                           if lab == size_var.get()), "medium"),
+                             "mode": "lan"})   # 只保留桥模式
+            self.url = picked_url
+            try:
+                save_config(self.cfg)
+            except OSError as e:
+                status.configure(text=t("save_fail", L, e=e), fg=BAD)
+                return
+
+            self._n_push = 0
+            self.apply_size(self.cfg.get("size", "medium"))
+            self._start_backend()
+            status.configure(text=t("saved_verifying", L), fg="#888")
+
+            target = picked_url
+
+            def verify() -> None:
+                ok, detail = False, ""
+                try:
+                    base = target.rsplit("/", 1)[0]
+                    with urllib.request.urlopen(base + "/state", timeout=5) as r:
+                        data = json.loads(r.read().decode("utf-8"))
+                    ok = bool(data.get("state"))
+                    detail = str(data.get("state", ""))
+                except Exception as exc:
+                    detail = exc.__class__.__name__
+                self.post(lambda: report(ok, detail))
+
+            def report(ok: bool, detail: str) -> None:
+                if ok:
+                    status.configure(text=t("saved_ok", L, s=detail), fg=OK)
+                else:
+                    status.configure(text=t("saved_fail", L, e=detail,
+                                            where=t("where_addr", L)), fg=BAD)
+
+            threading.Thread(target=verify, daemon=True).start()
+
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
         tk.Button(bar, text=t("lang_btn", L),
                   command=_show_lamp_language).pack(side="left")
-        tk.Button(bar, text=t("cancel", L),
-                  command=_close_settings).pack(side="right")
+        tk.Button(bar, text=t("cancel", L), command=_close_settings).pack(side="right")
         tk.Button(bar, text=t("save", L), command=_save).pack(side="right", padx=8)
 
-        _apply_mode()
-        _refresh_dep()
         dlg.after_idle(_fit_height)
         dlg.after(20, lambda: self._center(dlg))
+
 
     def _reset_pos(self) -> None:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"

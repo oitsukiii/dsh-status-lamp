@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Status Lamp Bridge",
+    "description": "Serves DSH session state over HTTP + SSE for the DSH Status Lamp desktop widget. Starts and stops with DSH; no extra process."
+  }
+}

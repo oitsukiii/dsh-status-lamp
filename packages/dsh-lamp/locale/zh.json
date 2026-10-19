@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "状态灯桥",
+    "description": "把 DSH 的会话状态通过 HTTP + SSE 提供给「DSH 状态灯」桌面小挂件。随 DSH 启动，无需额外进程。"
+  }
+}

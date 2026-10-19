@@ -45,6 +45,7 @@ export function apply(ctx, options = {}) {
             age_s: lastEventAt ? Math.round((now - lastEventAt) / 100) / 10 : null,
             done_age_s: state === 'done' && doneAt ? Math.round((now - doneAt) / 100) / 10 : null,
             source: 'plugin',
+            endpoint: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}/events`,
             updated_at: new Date(now).toISOString(),
         };
     }

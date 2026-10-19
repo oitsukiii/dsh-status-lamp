@@ -40,6 +40,8 @@ interface LampSnapshot {
   done_age_s: number | null
   /** 走插件版时固定为 "plugin"，方便对照。 */
   source: 'plugin'
+  /** 这个桥自己的地址，客户端可以直接填。 */
+  endpoint: string
   /** 更新时间，ISO 字符串。 */
   updated_at: string
 }
@@ -90,6 +92,7 @@ export function apply(ctx: LampContext, options: BridgeOptions = {}): void {
       age_s: lastEventAt ? Math.round((now - lastEventAt) / 100) / 10 : null,
       done_age_s: state === 'done' && doneAt ? Math.round((now - doneAt) / 100) / 10 : null,
       source: 'plugin',
+      endpoint: `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${port}/events`,
       updated_at: new Date(now).toISOString(),
     }
   }
