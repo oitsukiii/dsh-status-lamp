@@ -4,7 +4,7 @@
 
 不用切窗口，不用看日志，余光扫一下就行。
 
-> **开发方式**：本项目由 **DSH**（DeepSeek Harness）驱动 **DeepSeek V4.1 Flash** 以 vibecoding 方式完成 —— 全程靠对话描述需求、跑起来看、发现问题再改，没有先写设计文档。素材（三色灯精灵图）由 ComfyUI 生成，再用 `tools/` 下的脚本裁切、去凸起、改未亮灯泡的颜色。
+> **开发方式**：本项目由 **DSH**（DeepSeek Harness）驱动 **DeepSeek V4.1 Flash** 以 vibecoding 方式完成 —— 全程靠对话描述需求、跑起来看、发现问题再改。素材（三色灯精灵图）由 ComfyUI 生成，再用 `tools/` 下的脚本裁切、去凸起、改未亮灯泡的颜色。
 
 **中文** | [English](README.en.md)
 
