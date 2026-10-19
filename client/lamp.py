@@ -699,25 +699,38 @@ class Lamp:
     def _build_menu(self) -> None:
         L = self.lang
         self.menu = tk.Menu(self.root, tearoff=0)
+
         self.menu.add_command(label=t("menu_refresh", L), command=self.poll)
         self.menu.add_command(label=t("menu_reset", L), command=self._reset_pos)
         self.menu.add_separator()
-        self.menu.add_command(label=t("menu_settings", L), command=self.open_settings)
+
+        # 常用开关直接放菜单里，省得为了改一个勾去开设置窗口
+        self.var_sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
+        self.menu.add_checkbutton(label=t("sound", L), variable=self.var_sound,
+                                  command=self._toggle_sound)
+        self.var_breath = tk.BooleanVar(value=bool(self.cfg.get("breath", True)))
+        self.menu.add_checkbutton(label=t("breath", L), variable=self.var_breath,
+                                  command=self._toggle_breath)
+
+        size_menu = tk.Menu(self.menu, tearoff=0)
+        self.var_size = tk.StringVar(value=self.cfg.get("size", "medium"))
+        for key, label_key in (("small", "size_small"),
+                               ("medium", "size_medium"),
+                               ("large", "size_large")):
+            size_menu.add_radiobutton(
+                label=t(label_key, L), variable=self.var_size, value=key,
+                command=lambda k=key: self._change_size(k))
+        self.menu.add_cascade(label=t("size", L), menu=size_menu)
+
         self.menu.add_separator()
         self.var_top = tk.BooleanVar(value=True)
         self.menu.add_checkbutton(label=t("menu_topmost", L), variable=self.var_top,
                                   command=self._toggle_topmost)
         self.menu.add_separator()
-        self.menu.add_command(label=t("menu_quit", L), command=self.root.destroy)
 
-    def _rebuild_menu(self) -> None:
-        """界面语言变了，菜单文字要跟着换 —— 直接重建一遍。"""
-        try:
-            self.menu.destroy()
-        except Exception:
-            pass
-        self.menu = tk.Menu(self.root, tearoff=0)
-        self._build_menu()
+        # 设置和退出放在最后两行
+        self.menu.add_command(label=t("menu_settings", L), command=self.open_settings)
+        self.menu.add_command(label=t("menu_quit", L), command=self.root.destroy)
 
     def _on_menu(self, ev) -> None:
         self.menu.tk_popup(ev.x_root, ev.y_root)
@@ -755,14 +768,6 @@ class Lamp:
         OK, BAD = "#2a7", "#c33"
 
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
-        sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
-        breath = tk.BooleanVar(value=bool(self.cfg.get("breath", True)))
-        SIZE_LABELS = [("small", t("size_small", self.lang)),
-                       ("medium", t("size_medium", self.lang)),
-                       ("large", t("size_large", self.lang))]
-        cur_size = self.cfg.get("size", "medium")
-        cur_label = next((lab for k, lab in SIZE_LABELS if k == cur_size),
-                         t("size_medium", self.lang))
 
         # ── 语言 ──
         lang_row = tk.Frame(dlg)
@@ -870,19 +875,6 @@ class Lamp:
             anchor="w", padx=12, pady=(0, 10))
 
 
-        # ── 开关 ──
-        tk.Checkbutton(dlg, text=t("sound", L), variable=sound).pack(
-            anchor="w", padx=14, pady=(12, 0))
-        tk.Checkbutton(dlg, text=t("breath", L), variable=breath).pack(
-            anchor="w", padx=14, pady=(2, 0))
-
-        size_row = tk.Frame(dlg)
-        size_row.pack(anchor="w", fill="x", padx=14, pady=(8, 0))
-        tk.Label(size_row, text=t("size", L)).pack(side="left")
-        size_var = tk.StringVar(value=cur_label)
-        ttk.Combobox(size_row, textvariable=size_var, state="readonly", width=8,
-                     values=[lab for _, lab in SIZE_LABELS]).pack(side="left", padx=(8, 0))
-
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
@@ -960,12 +952,8 @@ class Lamp:
             if not picked_url:
                 status.configure(text=t("need_addr", L), fg=BAD)
                 return
-            self.cfg.update({"server": picked_url,
-                             "sound": bool(sound.get()),
-                             "breath": bool(breath.get()),
-                             "size": next((k for k, lab in SIZE_LABELS
-                                           if lab == size_var.get()), "medium"),
-                             "mode": "lan"})   # 只保留桥模式
+            # 提示音 / 呼吸灯 / 大小 都在右键菜单里改，这里只管地址
+            self.cfg.update({"server": picked_url, "mode": "lan"})
             self.url = picked_url
             try:
                 save_config(self.cfg)
@@ -974,7 +962,6 @@ class Lamp:
                 return
 
             self._n_push = 0
-            self.apply_size(self.cfg.get("size", "medium"))
             self._start_backend()
             status.configure(text=t("saved_verifying", L), fg="#888")
 
@@ -1016,6 +1003,25 @@ class Lamp:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
                            f"+{self.root.winfo_screenheight() - self.h - 90}")
         self._save_pos()
+
+    def _save_cfg_quiet(self) -> None:
+        try:
+            save_config(self.cfg)
+        except OSError:
+            pass
+
+    def _toggle_sound(self) -> None:
+        self.cfg["sound"] = bool(self.var_sound.get())
+        self._save_cfg_quiet()
+
+    def _toggle_breath(self) -> None:
+        self.cfg["breath"] = bool(self.var_breath.get())
+        self._save_cfg_quiet()
+
+    def _change_size(self, key: str) -> None:
+        self.cfg["size"] = key
+        self._save_cfg_quiet()
+        self.apply_size(key)
 
     def _toggle_topmost(self) -> None:
         self.root.attributes("-topmost", self.var_top.get())
