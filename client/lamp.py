@@ -611,9 +611,8 @@ class Lamp:
             status.configure(text=t("copied", L), fg=OK)
 
         tk.Button(guide, text=t("copy_btn", L), command=_copy_prompt).pack(
-            anchor="w", padx=10, pady=(0, 4))
-        tk.Label(guide, justify="left", wraplength=500, fg="#888", font=("", 8),
-                 text=t("project_url", L, url=REPO_URL)).pack(anchor="w", padx=10, pady=(0, 6))
+            anchor="w", padx=10, pady=(0, 8))
+
 
         # ── 解码器 ──
         dep_box = tk.LabelFrame(dlg, text=t("dep_frame", L))
