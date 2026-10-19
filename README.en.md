@@ -1,6 +1,6 @@
 # DSH Status Lamp
 
-A small desktop widget that tells you at a glance what DSH is doing: reasoning, running a command, waiting for your approval, or finished.
+A traffic-light desktop widget for Windows, with a matching DSH plugin. One glance tells you what DSH is doing: yellow 🟡 while it works, red 🔴 when it needs you, green 🟢 when the turn is done.
 
 No window switching, no log tailing. A glance out of the corner of your eye.
 
