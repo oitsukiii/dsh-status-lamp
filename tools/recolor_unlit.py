@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """把「没亮的灯泡」从纯黑改成深灰。
 
-原来是纯黑 (0,0,0)，和灯罩边框的暗色几乎融在一起，看不出那里是个灯泡。
-改成偏冷的深灰，既不像亮着，又能看出灯泡的形状。
+灯罩是暖调的深灰 (36,31,30)，原来未亮的灯泡是纯黑，两者几乎融在一起。
 
-做法：按行投影找出「大片纯黑」的团块（就是没亮的灯泡），
-      用质心 + 半径把它圈出来，只在这个圆里改色。
-      边框、阴影那些零散的纯黑不受影响。
+⚠️ 第一版只改精确的 (0,0,0)，结果灯泡边缘有一圈「深灰但不是纯黑」的
+抗锯齿像素（(8,7,7)、(2,2,2) 之类）留了下来 —— 视觉上就像一颗被啃掉边的圆，
+也就是「灯泡变形」。所以这里改成按【圆形范围 + 暗度】判定：
+在灯泡圆内、且足够暗的像素，全部统一成同一个灰。
+
+灯泡位置是固定的三个圆心，半径按实测：
+    中心 x=70   y=59 / 141 / 222   半径 33
 """
 
 from __future__ import annotations
@@ -16,52 +19,34 @@ import sys
 import numpy as np
 from PIL import Image
 
-BULB_GREY = (58, 58, 62)   # 偏冷的深灰，跟暖色调灯罩拉开一点
-MIN_BLOB_ROWS = 20         # 连续这么高的黑区才算灯泡
-THRESHOLD = 128            # alpha 阈值
+BULB_GREY = (58, 58, 62)    # 偏冷深灰，和暖调灯罩拉开层次
+BULB_CENTERS = [(70, 59), (70, 141), (70, 222)]
+BULB_RADIUS = 33
+DARK_MAX = 70               # 三通道最大值低于它算「灯泡的暗部」
+THRESHOLD = 128             # alpha 阈值
 
 
 def recolor(im: Image.Image) -> tuple[Image.Image, int]:
     a = np.array(im.convert("RGBA"))
     h, w, _ = a.shape
-    rgb = a[:, :, :3]
-    black = (rgb[:, :, 0] == 0) & (rgb[:, :, 1] == 0) & (rgb[:, :, 2] == 0) & (a[:, :, 3] > THRESHOLD)
-
-    rows = black.sum(axis=1)
-    # 找连续的行区间（每行黑像素足够多才算灯泡的一部分）
-    blobs = []
-    run_start = None
-    for y in range(h):
-        heavy = rows[y] > w * 0.10
-        if heavy and run_start is None:
-            run_start = y
-        elif not heavy and run_start is not None:
-            if y - run_start >= MIN_BLOB_ROWS:
-                blobs.append((run_start, y - 1))
-            run_start = None
-    if run_start is not None and h - run_start >= MIN_BLOB_ROWS:
-        blobs.append((run_start, h - 1))
+    rgb = a[:, :, :3].astype(np.int16)
+    dark = (rgb.max(axis=2) < DARK_MAX) & (a[:, :, 3] > THRESHOLD)
 
     changed = 0
-    for y0, y1 in blobs:
-        strip = black[y0:y1 + 1]
-        ys, xs = np.nonzero(strip)
-        if len(ys) == 0:
-            continue
-        cy = y0 + ys.mean()
-        cx = xs.mean()
-        radius = (len(ys) / np.pi) ** 0.5 * 1.06   # 按面积估半径，留一点余量
-
-        yy, xx = np.mgrid[0:h, 0:w]
-        inside = ((yy - cy) ** 2 + (xx - cx) ** 2) <= radius ** 2
-        target = black & inside
+    for cx, cy in BULB_CENTERS:
+        y0, y1 = max(0, cy - BULB_RADIUS - 1), min(h, cy + BULB_RADIUS + 2)
+        x0, x1 = max(0, cx - BULB_RADIUS - 1), min(w, cx + BULB_RADIUS + 2)
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        inside = ((yy - cy) ** 2 + (xx - cx) ** 2) <= BULB_RADIUS ** 2
+        target = inside & dark[y0:y1, x0:x1]
         n = int(target.sum())
         if n:
-            a[target, 0] = BULB_GREY[0]
-            a[target, 1] = BULB_GREY[1]
-            a[target, 2] = BULB_GREY[2]
+            region = a[y0:y1, x0:x1]
+            region[target, 0] = BULB_GREY[0]
+            region[target, 1] = BULB_GREY[1]
+            region[target, 2] = BULB_GREY[2]
             changed += n
-        print(f"    团块 y={y0}..{y1}  中心=({cx:.0f},{cy:.0f})  半径={radius:.0f}  改色 {n} 像素")
+        print(f"    中心({cx},{cy})  半径{BULB_RADIUS}  改色 {n} 像素")
 
     return Image.fromarray(a), changed
 
@@ -78,7 +63,7 @@ def main() -> None:
         print(f"  {n}:")
         out, changed = recolor(im)
         out.save(path)
-        print(f"    合计 {changed} 像素 → {BULB_GREY}")
+        print(f"    合计 {changed}")
 
 
 if __name__ == "__main__":
