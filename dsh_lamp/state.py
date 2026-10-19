@@ -86,7 +86,8 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     if path is None:
-        return {"state": "offline", "reason": "no-session-file", "updated_at": now}
+        # 不再有 offline 状态：读不到就当作空闲（灯全灭）
+        return {"state": "idle", "reason": "no-session-file", "updated_at": now}
 
     age = time.time() - os.path.getmtime(path)
     session = os.path.basename(path).removeprefix("session-").removesuffix(".json")
@@ -96,7 +97,7 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
             doc = json.load(fh)
     except (OSError, json.JSONDecodeError) as exc:
         return {
-            "state": "offline",
+            "state": "idle",
             "reason": f"read-error: {exc.__class__.__name__}",
             "age_s": round(age, 1),
             "session": session[:12],
@@ -144,15 +145,12 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     except Exception:  # 事件流只是加分项，坏了也不能拖垮状态
         phase = {}
 
-    # 优先级：离线 > 等回答 > 重试 > 调工具 > 思考 > 完成 > 空闲
-    # ⚠️ offline 判定必须看【两个数据源】。
-    # 只盯 projcache 会误判：DSH 写 projcache 很懒（实测 Windows 上能几十秒不写），
-    # 而事件日志同时在更新 —— 这时 DSH 明明活着，却被判成离线，
-    # 后面的 phase 判断（queued/tool/thinking）全被这一行盖掉。
-    stale = age > STALE_SECONDS and (log_age is None or log_age > STALE_SECONDS)
-    if stale:
-        state = "offline"
-    elif q_active:
+    # 优先级：等回答 > 重试 > 审批 > 调工具 > 工作 > 完成 > 思考 > 空闲
+    #
+    # ⚠️ 不再用「数据陈旧」判断离线 —— 空闲时两个数据源都会停写，陈旧≠没在跑。
+    # 「离线」现在只表示读不到数据（见上面的 read-error / no-session-file 分支）；
+    # 局域网模式连不上桥的情况，由客户端看门狗负责。
+    if q_active:
         state = "question"
     elif retry or phase.get("phase") == "retrying":
         state = "retrying"

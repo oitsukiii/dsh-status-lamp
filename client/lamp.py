@@ -14,7 +14,6 @@
     thinking  绿   LLM 正在推理/生成
     done      青   刚完成一轮（8 秒内）
     idle      灰白 没有进行中的 turn
-    offline   暗灰 状态桥连不上，或状态文件太久没更新
 
 交互
 ----
@@ -198,7 +197,6 @@ STATE_IMAGE = {
     "thinking":  "working.png",
     "done":      "done.png",
     "idle":      "idle.png",
-    "offline":   "offline.png",
     "working":   "working.png",   # 兼容旧版桥
 }
 
@@ -210,7 +208,6 @@ PALETTE = {
     "thinking":  {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},  # 绿：推理/生成
     "done":      {"core": "#1abc9c", "glow": "#a3e4d7", "ring": "#117864"},  # 青：刚完成
     "idle":      {"core": "#b8b8b0", "glow": "#e8e8e2", "ring": "#8a8a82"},  # 灰白：空闲
-    "offline":   {"core": "#4a4a48", "glow": "#6e6e6a", "ring": "#2a2a28"},  # 暗灰：离线
     # 兼容旧版桥（只返回 working）
     "working":   {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},
 }
@@ -222,7 +219,6 @@ LABEL = {
     "thinking":  "思考中",
     "done":      "完成",
     "idle":      "空闲",
-    "offline":   "离线",
     "working":   "工作中",
 }
 
@@ -234,7 +230,7 @@ def fetch_state(url: str, timeout: float = 2.0) -> dict:
         with urllib.request.urlopen(base + "/state", timeout=timeout) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, ValueError) as exc:
-        return {"state": "offline", "reason": f"{exc.__class__.__name__}"}
+        return {"state": "idle", "reason": f"{exc.__class__.__name__}"}
 
 
 def sse_worker(url: str, q: "queue.Queue") -> None:
@@ -276,7 +272,7 @@ class Lamp:
         self.lang = normalize(cfg.get("lang"))
         self.url = cfg["server"]
         self._backend = None
-        self.state = "offline"
+        self.state = "idle"
         self.detail = ""
         self._last_state = None
 
@@ -295,6 +291,8 @@ class Lamp:
 
         self._q: queue.Queue = queue.Queue()
         self._n_push = 0
+        self._last_rx = time.time()      # 最后一次收到数据的时间（含心跳）
+        self._watchdog_ms = 60000        # 局域网模式超过这么久没数据 ⇒ 判离线
         self._photos: dict[str, object] = {}
         self._assets = self._load_assets()
         self.w, self.h = self._window_size()
@@ -420,7 +418,7 @@ class Lamp:
             return
 
         # 没素材：退回画一个圆点
-        pal = PALETTE.get(self.state, PALETTE["offline"])
+        pal = PALETTE.get(self.state, PALETTE["idle"])
         r = 32
         cx = cy = self.w / 2
         c.create_oval(cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8,
@@ -787,6 +785,7 @@ class Lamp:
         try:
             while got < 20:
                 data = self._q.get_nowait()
+                self._last_rx = time.time()
                 self._n_push += 1
                 self._apply(data)
                 got += 1
@@ -799,9 +798,9 @@ class Lamp:
         self._apply(fetch_state(self.url))
 
     def _apply(self, data: dict) -> None:
-        state = data.get("state", "offline")
+        state = data.get("state", "idle")
         if state not in PALETTE:
-            state = "offline"
+            state = "idle"          # 未知状态一律按空闲处理（灯全灭）
 
         bits = [LABEL[state]]
         # 调工具时把工具名也显示出来，这是信息量最大的一项
@@ -828,7 +827,7 @@ class Lamp:
             self._last_state = state
             self._draw()
             # 只在【进入】完成态时响，且不是从离线恢复过来的噪声
-            if state == "done" and prev not in (None, "offline"):
+            if state == "done" and prev is not None:
                 if self.cfg.get("sound", True):
                     play_done_sound()
 

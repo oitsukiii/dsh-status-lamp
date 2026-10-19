@@ -135,7 +135,7 @@ class _Handler(BaseHTTPRequestHandler):
             payload = json.dumps(read_state(), ensure_ascii=False).encode("utf-8")
         except Exception as exc:  # 桥本身绝不能因为读状态而崩
             payload = json.dumps(
-                {"state": "offline", "reason": f"bridge-error: {exc.__class__.__name__}"}
+                {"state": "idle", "reason": f"bridge-error: {exc.__class__.__name__}"}
             ).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
