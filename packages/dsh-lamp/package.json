@@ -1,0 +1,29 @@
+{
+  "name": "dsh-lamp-bridge",
+  "version": "0.1.0",
+  "description": "Serves DSH session state over HTTP + SSE for the DSH Status Lamp desktop widget, driven by live session events rather than polling files.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "cordis",
+    "plugin",
+    "status",
+    "lamp"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  }
+}
