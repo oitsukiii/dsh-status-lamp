@@ -71,7 +71,7 @@ STRINGS: dict[str, dict[str, str]] = {
         # 灯语说明
         "lang_btn": "灯语说明",
         "lang_title": "灯语说明",
-        "lang_intro": "灯只有四种表现",
+        "lang_intro": "灯语一览",
         "lang_red": "红", "lang_yellow": "黄", "lang_green": "绿", "lang_off": "全灭",
         "lang_red_h": "需要你介入",
         "lang_red_1": "审批弹窗挂起 —— 等你点「允许」",
@@ -140,7 +140,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu_quit": "Quit",
         "lang_btn": "Lamp states",
         "lang_title": "What the lamp means",
-        "lang_intro": "The lamp has four looks",
+        "lang_intro": "State reference",
         "lang_red": "Red", "lang_yellow": "Yellow", "lang_green": "Green", "lang_off": "Off",
         "lang_red_h": "Needs you",
         "lang_red_1": "Approval dialog open -- waiting for allow",
