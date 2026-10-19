@@ -141,6 +141,31 @@ The log is read by seeking to the end, locating a frame header, and decompressin
 
 ---
 
+## On read receipts
+
+**Not possible. DSH has no such concept.**
+
+What was checked:
+
+| Looked for | Found |
+|---|---|
+| Fields like `unread` / `markRead` / `lastRead` | Only "unread **bytes**" from truncated shell output -- nothing about people |
+| The client reporting attention (`visibilitychange`, `document.hidden`, `hasFocus`) | Present, but only for local behaviour: releasing a microphone, cancelling a recording, retrying a request. Nothing is sent to the host |
+| Client-to-host connection state | Network availability only, not "someone is looking" |
+| The `delivery-accepted` event | A session-log format marker, **not** "the user received this" |
+
+**The architectural reason**: the DSH web client never tells the host that a person is watching. The host knows an event was committed; it does not know whether anything rendered it on screen.
+
+**The nearest signals are all wrong:**
+
+```
+the time of the last user/message   -- that is speaking, not reading
+the time of the last event          -- that is DSH working, not the user
+the client being online             -- a background tab counts as online
+```
+
+**So this lamp answers "what is DSH doing", not "have you read it".**
+
 ## Other bits
 
 - **Breathing** — brightness cycles between 60% and 100%, pausing a second at full, toggleable
