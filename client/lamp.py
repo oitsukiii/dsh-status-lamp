@@ -537,7 +537,7 @@ class Lamp:
         dlg = tk.Toplevel(self.root)
         L = self.lang
         dlg.title(t("settings_title", L))
-        dlg.geometry(f"{self.px(620)}x{self.px(700)}")
+        dlg.geometry(f"{self.px(620)}x1")   # 高度稍后按内容算
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
@@ -752,6 +752,18 @@ class Lamp:
         status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
+        def _fit_height() -> None:
+            """把窗口高度收到刚好包住内容。
+
+            模式切换会改变内容高度（局域网多一个「复制指令」框），
+            所以每次切换都要重算。
+            """
+            try:
+                dlg.update_idletasks()
+                dlg.geometry(f"{self.px(620)}x{dlg.winfo_reqheight()}")
+            except Exception:
+                pass
+
         # ── 模式切换 ──
         def _apply_mode() -> None:
             if mode.get() == "local":
@@ -760,6 +772,7 @@ class Lamp:
             else:
                 local_box.pack_forget()
                 lan_box.pack(fill="x", padx=14, pady=(6, 0))
+            dlg.after_idle(_fit_height)
 
         # ── 保存 ──
         def _save() -> None:
@@ -885,6 +898,7 @@ class Lamp:
 
         _apply_mode()
         _refresh_dep()
+        dlg.after_idle(_fit_height)
 
     def _reset_pos(self) -> None:
         self.root.geometry(f"+{self.root.winfo_screenwidth() - self.w - 40}"
