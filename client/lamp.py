@@ -448,18 +448,19 @@ class Lamp:
         self.menu.tk_popup(ev.x_root, ev.y_root)
 
     def open_settings(self) -> None:
-        """设置窗口：选模式后只显示该模式的配置。"""
+        """设置窗口：选模式后只显示该模式的配置，测试按钮也各在各的面板里。"""
         dlg = tk.Toplevel(self.root)
         dlg.title("DSH 状态灯 — 设置")
-        dlg.geometry("600x620")
+        dlg.geometry("620x660")
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
         mode = tk.StringVar(value=self.cfg.get("mode", "local"))
         server = tk.StringVar(value=self.cfg.get("server", DEFAULT_CONFIG["server"]))
-        # 输入框直接显示【当前生效的目录】，而不是空白 —— 否则用户不知道到底用的是哪
         dsh_home_var = tk.StringVar(value=self.cfg.get("dsh_home") or dsh_home())
         sound = tk.BooleanVar(value=bool(self.cfg.get("sound", True)))
+
+        OK, BAD, WARN = "#2a7", "#c33", "#c80"
 
         # ── 数据来源 ──
         tk.Label(dlg, text="数据来源", font=("", 10, "bold")).pack(
@@ -471,17 +472,15 @@ class Lamp:
                        variable=mode, value="lan",
                        command=lambda: _apply_mode()).pack(anchor="w", padx=24)
 
-        # 两个模式的配置都挂在同一个容器里，一次只 pack 一个
         mode_area = tk.Frame(dlg)
-        mode_area.pack(fill="x", padx=0, pady=(8, 0))
+        mode_area.pack(fill="x", pady=(8, 0))
 
-        # ── 本机模式配置 ──
+        # ── 本机模式 ──
         local_box = tk.LabelFrame(mode_area, text=" 本机模式 ")
-        tk.Label(local_box, text="DSH 数据目录").pack(
-            anchor="w", padx=10, pady=(8, 2))
+        tk.Label(local_box, text="DSH 数据目录").pack(anchor="w", padx=10, pady=(8, 2))
         row = tk.Frame(local_box)
         row.pack(anchor="w", padx=12)
-        home_ent = tk.Entry(row, textvariable=dsh_home_var, width=48)
+        home_ent = tk.Entry(row, textvariable=dsh_home_var, width=46)
         home_ent.pack(side="left")
 
         def _browse() -> None:
@@ -493,18 +492,75 @@ class Lamp:
                 dsh_home_var.set(picked)
 
         tk.Button(row, text="浏览…", command=_browse).pack(side="left", padx=(6, 0))
-        home_hint = tk.Label(local_box, justify="left", wraplength=540, fg="#888",
-                             font=("", 8), text="")
-        home_hint.pack(anchor="w", padx=12, pady=(3, 8))
+        tk.Label(local_box, justify="left", wraplength=540, fg="#888", font=("", 8),
+                 text=f"默认是 {default_home_display()}，"
+                      f"里面应该有 storages/ 和 sessions/ 两个子目录。").pack(
+            anchor="w", padx=12, pady=(3, 6))
 
-        # ── 局域网模式配置 ──
+        local_test_row = tk.Frame(local_box)
+        local_test_row.pack(anchor="w", padx=12, pady=(0, 10))
+        # width 8 + anchor=w：预先占好位置，文字出现/消失都不会挤动按钮
+        local_result = tk.Label(local_test_row, text="", font=("", 9),
+                                width=8, anchor="w")
+        # 注意顺序：按钮先 pack ⇒ 在左；结果后 pack ⇒ 在右
+
+        def _test_read_local() -> None:
+            try:
+                set_dsh_home(dsh_home_var.get().strip())
+                from dsh_lamp.state import read_state
+                st = read_state(None)
+                if st.get("state"):
+                    local_result.configure(text="读取成功", fg=OK)
+                else:
+                    local_result.configure(text="读取失败", fg=BAD)
+            except Exception:
+                local_result.configure(text="读取失败", fg=BAD)
+
+        tk.Button(local_test_row, text="测试读取", command=_test_read_local).pack(side="left")
+        local_result.pack(side="left", padx=(10, 0))
+
+        # ── 局域网模式 ──
         lan_box = tk.LabelFrame(mode_area, text=" 局域网模式 ")
         tk.Label(lan_box, text="桥地址").pack(anchor="w", padx=10, pady=(8, 2))
-        ent = tk.Entry(lan_box, textvariable=server, width=58)
+        ent = tk.Entry(lan_box, textvariable=server, width=56)
         ent.pack(anchor="w", padx=12)
 
+        lan_test_row = tk.Frame(lan_box)
+        lan_test_row.pack(anchor="w", padx=12, pady=(8, 2))
+        conn_result = tk.Label(lan_test_row, text="", font=("", 9),
+                               width=8, anchor="w")
+        read_result = tk.Label(lan_test_row, text="", font=("", 9),
+                               width=8, anchor="w")
+
+        def _lan_base() -> str:
+            return server.get().strip().rsplit("/", 1)[0]
+
+        def _test_conn() -> None:
+            try:
+                with urllib.request.urlopen(_lan_base() + "/state", timeout=4) as r:
+                    r.read(1)
+                conn_result.configure(text="连接成功", fg=OK)
+            except Exception:
+                conn_result.configure(text="连接失败", fg=BAD)
+
+        def _test_read_lan() -> None:
+            try:
+                with urllib.request.urlopen(_lan_base() + "/state", timeout=4) as r:
+                    data = json.loads(r.read().decode("utf-8"))
+                if data.get("state"):
+                    read_result.configure(text="读取成功", fg=OK)
+                else:
+                    read_result.configure(text="读取失败", fg=BAD)
+            except Exception:
+                read_result.configure(text="读取失败", fg=BAD)
+
+        tk.Button(lan_test_row, text="测试连接", command=_test_conn).pack(side="left")
+        conn_result.pack(side="left", padx=(8, 4))
+        tk.Button(lan_test_row, text="测试读取", command=_test_read_lan).pack(side="left")
+        read_result.pack(side="left", padx=(8, 0))
+
         guide = tk.LabelFrame(lan_box, text=" 还没有桥？ ")
-        guide.pack(fill="x", padx=12, pady=(8, 8))
+        guide.pack(fill="x", padx=12, pady=(8, 10))
         tk.Label(guide, justify="left", wraplength=500, fg="#555",
                  text="点下面的按钮复制一段指令，发给你的 DSH，"
                       "让它配好服务器端软件并把地址回给你。").pack(
@@ -513,7 +569,7 @@ class Lamp:
         def _copy_prompt() -> None:
             self.root.clipboard_clear()
             self.root.clipboard_append(AGENT_PROMPT)
-            status.configure(text="✓ 已复制，发给你的 DSH 即可", fg="#2a7")
+            status.configure(text="已复制，发给你的 DSH 即可", fg=OK)
 
         tk.Button(guide, text="复制配置指令", command=_copy_prompt).pack(
             anchor="w", padx=10, pady=(0, 4))
@@ -525,37 +581,29 @@ class Lamp:
         dep_box.pack(fill="x", padx=14, pady=(10, 0))
         dep = tk.Frame(dep_box)
         dep.pack(anchor="w", fill="x", padx=8, pady=(6, 0))
-        dep_label = tk.Label(dep, justify="left", wraplength=400, font=("", 8))
+        dep_label = tk.Label(dep, justify="left", wraplength=400, font=("", 9))
         dep_label.pack(side="left", anchor="w")
         why_label = tk.Label(dep_box, justify="left", wraplength=520, fg="#999", font=("", 8),
             text="为什么要安装解码器：DSH 的详细日志是使用 zstd 压缩储存的，\n"
                  "需要装一个 zstd 解码器才能读取“思考中、调用工具”这类状态。")
 
         def _refresh_dep() -> None:
-            """按钮和说明【始终可见】，且按钮位置固定在最左侧。
-
-            两种状态只是按钮文字不同、右边多不多一个「解码：xxx ✓」标签而已。
-            """
             from dsh_lamp.event_tail import decompressor_kind
             kind = decompressor_kind()
+            installed = kind != "none"
             install_btn.pack_forget()
             dep_label.pack_forget()
-            installed = kind != "none"
             install_btn.configure(
                 text="重新安装解码器" if installed else "一键安装解码器")
             install_btn.pack(side="left", anchor="w")
-            if installed:
-                dep_label.configure(fg="#2a7", text="已安装")
-            else:
-                dep_label.configure(fg="#c80", text="未安装")
+            dep_label.configure(fg=OK if installed else WARN,
+                                text="已安装" if installed else "未安装")
             dep_label.pack(side="left", anchor="w", padx=(10, 0))
-            # 说明文字任何情况下都保留
             why_label.pack(anchor="w", padx=8, pady=(4, 8))
 
         def _one_click_install() -> None:
             install_btn.configure(state="disabled", text="安装中…")
-            dep_label.configure(fg="#888", text="正在安装 pyzstd…")
-            dep_label.pack(side="left", anchor="w")
+            dep_label.configure(fg="#888", text="正在安装…")
 
             def work() -> None:
                 ok, msg = False, ""
@@ -566,97 +614,65 @@ class Lamp:
                     ok = proc.returncode == 0
                     if not ok:
                         tail = (proc.stderr or proc.stdout or "").strip().splitlines()
-                        msg = tail[-1][:160] if tail else f"退出码 {proc.returncode}"
+                        msg = tail[-1][:140] if tail else f"退出码 {proc.returncode}"
                 except Exception as exc:
                     msg = exc.__class__.__name__
                 self.root.after(0, lambda: done(ok, msg))
 
             def done(ok: bool, msg: str) -> None:
-                install_btn.configure(state="normal", text="一键安装解码器")
+                install_btn.configure(state="normal")
                 if ok:
                     _refresh_dep()
-                    status.configure(text="✓ 装好了——重启软件生效", fg="#2a7")
+                    status.configure(text="装好了——重启软件生效", fg=OK)
                 else:
-                    install_btn.pack_forget()
-                    dep_label.pack_forget()
-                    install_btn.configure(text="重新安装解码器")
-                    install_btn.pack(side="left", anchor="w")
-                    dep_label.configure(fg="#c33", text=f"✗ 安装失败：{msg}")
-                    dep_label.pack(side="left", anchor="w", padx=(10, 0))
-                    status.configure(text="可以手动执行：pip install pyzstd", fg="#c33")
+                    dep_label.configure(fg=BAD, text=f"安装失败：{msg}")
+                    status.configure(text="可以手动执行：pip install pyzstd", fg=BAD)
 
             threading.Thread(target=work, daemon=True).start()
 
         install_btn = tk.Button(dep, text="一键安装解码器", command=_one_click_install)
 
-        # ── 最下面：提示音开关 ──
+        # ── 最下面 ──
         tk.Checkbutton(dlg, text="任务完成时播放提示音", variable=sound).pack(
             anchor="w", padx=14, pady=(12, 0))
-
-        status = tk.Label(dlg, text="", fg="#2a7", anchor="w")
+        status = tk.Label(dlg, text="", fg=OK, anchor="w", font=("", 9))
         status.pack(anchor="w", padx=14, pady=(6, 0))
 
         # ── 模式切换 ──
         def _apply_mode() -> None:
-            local = mode.get() == "local"
-            if local:
+            if mode.get() == "local":
                 lan_box.pack_forget()
                 local_box.pack(fill="x", padx=14, pady=(6, 0))
-                home_hint.configure(
-                    text=f"默认是 {default_home_display()}，"
-                         f"里面应该有 storages/ 和 sessions/ 两个子目录。")
             else:
                 local_box.pack_forget()
                 lan_box.pack(fill="x", padx=14, pady=(6, 0))
 
-        # ── 按钮 ──
-        def _test() -> None:
-            if mode.get() == "local":
-                try:
-                    from dsh_lamp.state import read_state
-                    set_dsh_home(dsh_home_var.get().strip())
-                    st = read_state(None)
-                    status.configure(
-                        text=f"✓ 读到了：{st.get('state')}（轮次 {st.get('turn')}）", fg="#2a7")
-                except Exception as e:
-                    # 只报异常类型，不把完整路径打到界面上（截图会泄漏用户名）
-                    status.configure(text=f"✗ 读取失败：{e.__class__.__name__}", fg="#c33")
-                return
-            base = server.get().strip().rsplit("/", 1)[0]
-            try:
-                with urllib.request.urlopen(base + "/state", timeout=4) as r:
-                    data = json.loads(r.read().decode("utf-8"))
-                status.configure(text=f"✓ 连上了：{data.get('state')}", fg="#2a7")
-            except Exception as e:
-                status.configure(text=f"✗ 连不上：{e.__class__.__name__}", fg="#c33")
-
+        # ── 保存 ──
         def _save() -> None:
-            # 和默认目录一致就不写死 —— 否则以后换机器/换用户名会失效
             picked = dsh_home_var.get().strip()
             try:
-                same_as_default = (os.path.normcase(os.path.normpath(picked))
-                                   == os.path.normcase(os.path.normpath(default_dsh_home())))
+                same = (os.path.normcase(os.path.normpath(picked))
+                        == os.path.normcase(os.path.normpath(default_dsh_home())))
             except Exception:
-                same_as_default = False
+                same = False
             self.cfg.update({"mode": mode.get(), "server": server.get().strip(),
-                             "dsh_home": "" if same_as_default else picked,
+                             "dsh_home": "" if same else picked,
                              "sound": bool(sound.get())})
             self.url = self.cfg["server"]
             set_dsh_home(self.cfg["dsh_home"])
             try:
                 save_config(self.cfg)
             except OSError as e:
-                status.configure(text=f"✗ 保存失败：{e}", fg="#c33")
+                status.configure(text=f"保存失败：{e}", fg=BAD)
                 return
             self._n_push = 0
             self._start_backend()
-            status.configure(text="✓ 已保存并重连", fg="#2a7")
+            status.configure(text="已保存并重连", fg=OK)
 
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
-        tk.Button(bar, text="测试连接", command=_test).pack(side="left")
-        tk.Button(bar, text="保存并重连", command=_save).pack(side="right")
-        tk.Button(bar, text="取消", command=dlg.destroy).pack(side="right", padx=8)
+        tk.Button(bar, text="取消", command=dlg.destroy).pack(side="right")
+        tk.Button(bar, text="保存并重连", command=_save).pack(side="right", padx=8)
 
         _apply_mode()
         _refresh_dep()
