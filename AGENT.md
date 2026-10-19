@@ -38,7 +38,20 @@
 同样的道理：`sys.stdout` / `sys.stderr` 在窗口模式打包后是 `None`，
 任何 `print()` 都会抛异常 —— `_ensure_std_streams()` 就是为此存在的。
 
-## 三、验证清单
+## 三、这台机器上 git 要走代理
+
+直连 github.com 实测 **20 秒超时**，走 `127.0.0.1:7897` 是 **2 秒**。
+
+```bash
+git config --global http.proxy  http://127.0.0.1:7897
+git config --global https.proxy http://127.0.0.1:7897
+```
+
+`pnpm add github:...`、`git clone` 也一样受影响 —— 不开代理 clone 这个仓库要三分钟。
+
+代理没起来的时候 git 会直接失败，不是变慢。排查时先 `ss -ltn | grep 7897`。
+
+## 四、验证清单
 
 改完插件代码后：
 
