@@ -1,4 +1,4 @@
-"""数据源抽象 —— 本机模式和局域网模式用同一个接口。
+"""数据源抽象 —— 从状态桥读状态。
 
 客户端只调 start()，后端自己在后台线程里把状态推给 on_state 回调。
 回调必须线程安全（客户端用 queue.put）。
@@ -13,11 +13,8 @@ import urllib.error
 import urllib.request
 from typing import Callable, Optional
 
-from .state import read_state, state_hash
 
-# 本机模式：读文件很便宜，200ms 足够
-FILE_INTERVAL = 0.2
-# 局域网模式：断线重连的退避范围
+# 断线重连的退避范围
 RECONNECT_MIN = 1.0
 RECONNECT_MAX = 30.0
 # SSE 读超时必须大于桥的心跳间隔（20 秒），否则误判断线
@@ -43,42 +40,6 @@ class BaseBackend:
         raise NotImplementedError
 
 
-def zstd_available() -> bool:
-    """能不能解 zstd（决定能否读到细粒度状态）。
-
-    三条路都算：Python 3.14 标准库 / pyzstd / zstd 命令行。
-    不能解也能跑 —— 只是只能判断「忙/闲」。
-    """
-    from .event_tail import decompressor_available
-    return decompressor_available()
-
-
-class FileBackend(BaseBackend):
-    """本机模式：直接读 $DSH_HOME 下的文件，不需要桥、不需要网络。"""
-
-    def __init__(self, on_state, done_window_ms: "int | None" = None) -> None:
-        super().__init__(on_state)
-        # 和桥保持一致的默认值：绿灯保持 3 分钟后回退。
-        # 以前默认 None（永不超时），结果本机模式下 done 之后灯永远是绿的，
-        # 而且「完成」提示音也不会再响（它只在 done 的上升沿触发）。
-        self.done_window_ms = 180_000 if done_window_ms is None else done_window_ms
-        self._last: Optional[str] = None
-
-    def _run(self) -> None:
-        while not self._stop.is_set():
-            try:
-                state = read_state(self.done_window_ms)
-                h = state_hash(state)
-                if h != self._last:
-                    self._last = h
-                    self.on_state(state)
-            except Exception:
-                pass
-            self._stop.wait(FILE_INTERVAL)
-
-    def force(self) -> None:
-        """清掉指纹，让下一轮必定重新下发一次（供「立刻刷新」用）。"""
-        self._last = None
 
 
 class SseBackend(BaseBackend):
@@ -122,4 +83,3 @@ def make_backend(cfg: dict, on_state) -> BaseBackend:
     """按配置造后端。mode = "local" | "lan"。"""
     if cfg.get("mode", "local") == "lan":
         return SseBackend(on_state, cfg.get("server", "http://127.0.0.1:3099/events"))
-    return FileBackend(on_state, cfg.get("done_seconds"))

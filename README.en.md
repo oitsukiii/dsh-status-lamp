@@ -211,3 +211,26 @@ the client being online             -- a background tab counts as online
 ## 5. License
 
 MIT
+
+---
+
+## 6. Changelog
+
+### v1.1.0 · `874bd32`
+
+[Release](https://github.com/oitsukiii/dsh-status-lamp/releases/tag/v1.1.0)
+
+- **The bridge became a DSH plugin**: it subscribes to session events instead of polling disk, so it needs no zstd decoder and no longer depends on when DSH flushes
+- **Settings rewritten**: local and LAN modes merged -- they differed only in one address
+- Sound, breathing and size moved into the context menu, applying at once
+- Bilingual interface
+- Breathing dims only the lit bulb; the housing no longer flickers with it
+- Fixed: the windowed build failed to start because of a missing numpy import
+
+### v1.0.0 · `cb0d2f3`
+
+[Release](https://github.com/oitsukiii/dsh-status-lamp/releases/tag/v1.0.0)
+
+- First release: the Python bridge plus the desktop widget
+- State came from polling the snapshot and decompressing the tail of the event log
+- ⚠️ The exe attached to this release does not start; use v1.1.0

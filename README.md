@@ -210,3 +210,26 @@ user/message 事件的时间     ← 那是「发言」，用户可能看了没�
 ## 5. 许可
 
 MIT
+
+---
+
+## 6. 更新日志
+
+### v1.1.0 · `874bd32`
+
+[Release](https://github.com/oitsukiii/dsh-status-lamp/releases/tag/v1.1.0)
+
+- **桥改成 DSH 插件**：订阅会话事件，不再轮询磁盘。因此不再需要 zstd 解码器，也不再受 DSH 落盘时机影响
+- **设置窗口重写**：「本机模式」和「局域网模式」合并 —— 两者只差一个地址
+- 提示音、呼吸灯、大小移进右键菜单，点了立刻生效
+- 界面中英双语
+- 呼吸灯只调点亮那颗灯泡，灯罩不再跟着闪
+- 修复：窗口版 exe 因缺少 numpy 无法启动
+
+### v1.0.0 · `cb0d2f3`
+
+[Release](https://github.com/oitsukiii/dsh-status-lamp/releases/tag/v1.0.0)
+
+- 第一个版本：Python 桥 + 桌面挂件
+- 状态来自轮询快照 + 解压事件日志尾部
+- ⚠️ 这个版本附带的 exe 起不来，请用 v1.1.0

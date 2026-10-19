@@ -18,8 +18,6 @@ a = Analysis(
     hiddenimports=[
         'PIL._tkinter_finder',     # Pillow 的 tk 桥，不写会缺
         'dsh_lamp.i18n',
-        'dsh_lamp.state',
-        'dsh_lamp.event_tail',
         'dsh_lamp.backends',
         'dsh_lamp.paths',
     ],
