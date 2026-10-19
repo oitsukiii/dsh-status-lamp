@@ -145,28 +145,31 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
     except Exception:  # 事件流只是加分项，坏了也不能拖垮状态
         phase = {}
 
-    # 优先级：等回答 > 重试 > 审批 > 调工具 > 工作 > 完成 > 思考 > 空闲
+    # 灯语（四色）：
+    #   红 = 需要你介入（审批挂起 / agent 提问）
+    #   黄 = 正在干活（调工具 / 推理 / 生成 / 重试 / 有 turn 开着）
+    #   绿 = 刚完成（turn/end 之后，窗口期内）
+    #   全灭 = 空闲（含读不到数据）
     #
-    # ⚠️ 不再用「数据陈旧」判断离线 —— 空闲时两个数据源都会停写，陈旧≠没在跑。
-    # 「离线」现在只表示读不到数据（见上面的 read-error / no-session-file 分支）；
-    # 局域网模式连不上桥的情况，由客户端看门狗负责。
+    # 审批排在重试前面：卡着等你点「允许」比自己在重试更需要人介入。
+    attention = None
     if q_active:
         state = "question"
+        attention = "question"          # agent 主动提问
+    elif phase.get("phase") == "approval":
+        state = "question"
+        attention = "approval"          # 审批弹窗挂起
     elif retry or phase.get("phase") == "retrying":
         state = "retrying"
-    elif phase.get("phase") == "approval":
-        # 审批弹窗挂起 ⇒ 要你点「允许」⇒ 红灯
-        state = "question"
     elif phase.get("phase") == "tool":
         state = "tool"
-    # ⭐ 关键：事件日志比 projcache 写得快得多。
-    # 新一轮刚开始时 projcache 里 openTurnStartSeq 可能还是 null（旧快照），
-    # 但日志里已经有 turn/start / step/start 了 —— 用日志判断，别等快照。
+    # 事件日志比 projcache 写得快：新一轮刚开始时快照里 openTurnStartSeq
+    # 可能还是 null，但日志里已经有 turn/start 了 —— 用日志判断，别等快照。
     elif phase.get("phase") in ("thinking", "replying", "starting", "queued"):
         state = "working"
     elif phase.get("phase") == "done":
-        # 必须排在 open_turn 之前：日志说 turn/end 时，projcache 的
-        # openTurnStartSeq 常常还没写回（懒写），否则绿灯会被吃掉变成黄灯。
+        # 排在 open_turn 之前：日志说 turn/end 时 projcache 常常还没写回，
+        # 否则绿灯会被吃掉变成黄灯。
         state = "done"
     elif open_turn is not None:
         state = "thinking"
@@ -187,6 +190,7 @@ def read_state(done_window_ms: "int | None | bool" = True) -> dict[str, Any]:
         "tool": phase.get("tool"),
         "pending_questions": len(q_active),
         "pending_calls": len(pending_calls),
+        "attention_reason": attention,
         "done_age_s": (
             round((time.time() * 1000 - (events[-1].get("time") or 0)) / 1000, 1)
             if phase.get("phase") in ("done",) and events else None

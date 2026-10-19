@@ -204,12 +204,12 @@ STATE_IMAGE = {
 PALETTE = {
     "question":  {"core": "#e74c3c", "glow": "#f5b7b1", "ring": "#922b21"},  # 红：需你介入（审批/提问）
     "retrying":  {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：重试
-    "tool":      {"core": "#3498db", "glow": "#aed6f1", "ring": "#1f618d"},  # 蓝：调工具
-    "thinking":  {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},  # 绿：推理/生成
+    "tool":      {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：调工具
+    "thinking":  {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},  # 黄：推理/生成
     "done":      {"core": "#1abc9c", "glow": "#a3e4d7", "ring": "#117864"},  # 青：刚完成
     "idle":      {"core": "#b8b8b0", "glow": "#e8e8e2", "ring": "#8a8a82"},  # 灰白：空闲
     # 兼容旧版桥（只返回 working）
-    "working":   {"core": "#2ecc71", "glow": "#a8f0c6", "ring": "#1e8449"},
+    "working":   {"core": "#f1c40f", "glow": "#fbeaa0", "ring": "#9a7d0a"},
 }
 
 LABEL = {
@@ -761,8 +761,43 @@ class Lamp:
 
             threading.Thread(target=verify, daemon=True).start()
 
+        def _show_lamp_language() -> None:
+            """灯语说明 —— 四色各是什么意思。"""
+            d = tk.Toplevel(dlg)
+            d.title(t("lang_title", L))
+            d.geometry("560x470")
+            d.attributes("-topmost", True)
+            d.resizable(False, False)
+            tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
+                anchor="w", padx=18, pady=(16, 10))
+
+            rows = [
+                ("#e74c3c", t("lang_red", L),    t("lang_red_h", L),
+                 [t("lang_red_1", L), t("lang_red_2", L)]),
+                ("#f1c40f", t("lang_yellow", L), t("lang_yellow_h", L),
+                 [t("lang_yellow_1", L), t("lang_yellow_2", L), t("lang_yellow_3", L)]),
+                ("#1abc9c", t("lang_green", L),  t("lang_green_h", L),
+                 [t("lang_green_1", L), t("lang_green_2", L)]),
+                ("#9a9a94", t("lang_off", L),    t("lang_off_h", L),
+                 [t("lang_off_1", L), t("lang_off_2", L)]),
+            ]
+            for color, label, head, details in rows:
+                row = tk.Frame(d)
+                row.pack(anchor="w", fill="x", padx=18, pady=(4, 8))
+                tk.Label(row, text="●", fg=color, font=("", 20)).pack(
+                    side="left", anchor="n", padx=(0, 10))
+                col = tk.Frame(row)
+                col.pack(side="left", anchor="w")
+                tk.Label(col, text=f"{label} · {head}", font=("", 10, "bold")).pack(anchor="w")
+                for line in details:
+                    tk.Label(col, text=f"· {line}", fg="#555", font=("", 9)).pack(anchor="w")
+            tk.Button(d, text=t("close", L), command=d.destroy).pack(
+                side="bottom", pady=14)
+
         bar = tk.Frame(dlg)
         bar.pack(side="bottom", fill="x", padx=14, pady=12)
+        tk.Button(bar, text=t("lang_btn", L),
+                  command=_show_lamp_language).pack(side="left")
         tk.Button(bar, text=t("cancel", L), command=dlg.destroy).pack(side="right")
         tk.Button(bar, text=t("save", L), command=_save).pack(side="right", padx=8)
 
@@ -803,6 +838,10 @@ class Lamp:
             state = "idle"          # 未知状态一律按空闲处理（灯全灭）
 
         bits = [LABEL[state]]
+        # 红灯要区分「等你允许（审批）」和「等你回答（提问）」
+        if state == "question":
+            bits[0] = ("等你允许" if data.get("attention_reason") == "approval"
+                       else "等你回答")
         # 调工具时把工具名也显示出来，这是信息量最大的一项
         if state == "tool" and data.get("tool"):
             bits[-1] = f"{LABEL[state]} · {data['tool']}"
