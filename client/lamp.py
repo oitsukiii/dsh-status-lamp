@@ -42,6 +42,27 @@ import time
 import urllib.error
 import urllib.request
 
+def _enable_dpi_awareness() -> None:
+    """Windows 高 DPI：不声明感知的话，系统会把窗口位图拉伸，字全糊。
+
+    必须在创建 Tk 之前调用，否则无效。
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        # 2 = per-monitor DPI aware（多显示器不同缩放时也正确）
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            import ctypes
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+_enable_dpi_awareness()
+
 try:
     import tkinter as tk
     from tkinter import ttk
@@ -277,6 +298,13 @@ class Lamp:
         self._last_state = None
 
         self.root = tk.Tk()
+        # 让 tk 的「点」按真实 DPI 换算 —— 字体才不会又小又糊
+        try:
+            dpi = self.root.winfo_fpixels("1i")
+            self.root.tk.call("tk", "scaling", dpi / 72.0)
+            self.dpi_scale = dpi / 96.0
+        except Exception:
+            self.dpi_scale = 1.0
         self.root.title("DSH Status Lamp")
         self.root.overrideredirect(True)          # 无边框
         self.root.configure(bg=BG_KEY)
@@ -340,6 +368,10 @@ class Lamp:
 
     # ---------- 素材 ----------
 
+    def px(self, n: int) -> int:
+        """把 96 DPI 下的像素值换算到当前缩放。"""
+        return max(1, int(round(n * getattr(self, "dpi_scale", 1.0))))
+
     def _load_assets(self) -> dict:
         """把状态图读进来，合成到色键背景上 —— 这样 tkinter 的透明色键才能生效。
 
@@ -357,9 +389,10 @@ class Lamp:
                 im = Image.open(path).convert("RGBA")
             except OSError:
                 continue
-            # 等比缩放到目标高度
-            ratio = LAMP_H / im.size[1]
-            size = (max(1, int(im.size[0] * ratio)), LAMP_H)
+            # 等比缩放到目标高度（高 DPI 下按倍数放大，否则灯会显得很小）
+            target_h = self.px(LAMP_H)
+            ratio = target_h / im.size[1]
+            size = (max(1, int(im.size[0] * ratio)), target_h)
             im = im.resize(size, Image.LANCZOS)
             # 合成到色键底色上（RGBA 直接给 PhotoImage 会丢掉 alpha）
             bg = Image.new("RGB", size, BG_KEY)
@@ -369,11 +402,12 @@ class Lamp:
 
     def _window_size(self) -> tuple:
         """窗口尺寸 = 素材尺寸 + 留白。"""
+        margin = self.px(MARGIN)
         if self._assets:
             any_im = next(iter(self._assets.values()))
-            return (any_im.size[0] + MARGIN * 2, any_im.size[1] + MARGIN * 2)
+            return (any_im.size[0] + margin * 2, any_im.size[1] + margin * 2)
         # 退回圆点：正方形
-        side = 64 + 14 * 2
+        side = self.px(64) + self.px(14) * 2
         return (side, side)
 
     # ---------- 位置记忆 ----------
@@ -419,7 +453,7 @@ class Lamp:
 
         # 没素材：退回画一个圆点
         pal = PALETTE.get(self.state, PALETTE["idle"])
-        r = 32
+        r = self.px(32)
         cx = cy = self.w / 2
         c.create_oval(cx - r - 8, cy - r - 8, cx + r + 8, cy + r + 8,
                       fill=pal["glow"], outline="", stipple="gray12")
@@ -473,7 +507,7 @@ class Lamp:
         dlg = tk.Toplevel(self.root)
         L = self.lang
         dlg.title(t("settings_title", L))
-        dlg.geometry("620x700")
+        dlg.geometry(f"{self.px(620)}x{self.px(700)}")
         dlg.attributes("-topmost", True)
         dlg.resizable(False, False)
 
@@ -765,7 +799,7 @@ class Lamp:
             """灯语说明 —— 四色各是什么意思。"""
             d = tk.Toplevel(dlg)
             d.title(t("lang_title", L))
-            d.geometry("560x470")
+            d.geometry(f"{self.px(560)}x{self.px(470)}")
             d.attributes("-topmost", True)
             d.resizable(False, False)
             tk.Label(d, text=t("lang_intro", L), font=("", 11, "bold")).pack(
