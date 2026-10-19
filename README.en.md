@@ -36,7 +36,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 | **Refresh now** | Fetch the state again instead of waiting for the next push |
 | **Reset position** | Bring the lamp back if it was dragged somewhere invisible |
 | **Always on top** | Whether it floats above other windows |
-| **Play a sound when a task completes** | A chime at the end of a turn |
+| **Play a sound when a task finishes or needs you** | A chime when a turn ends or the lamp turns red |
 | **Breathe the light** | The lit bulb cycles between 60% and 100% brightness, pausing a second at full |
 | **Lamp size** | Small, medium or large; takes effect immediately |
 | **Settings…** | Opens the window below |
@@ -137,7 +137,7 @@ the client being online             -- a background tab counts as online
 ### Behaviour
 
 - **Breathing** dims only the lit bulb, never the housing; turning it off returns to full brightness
-- **Sound** plays a chime when a turn completes
+- **Sound** plays a chime when a turn ends, or when the lamp turns red because it needs you
 - **Size** small / medium / large, keeping the window where it was
 - **Bilingual** Chinese and English, switching immediately in both the menu and the windows
 - **High DPI** declares per-monitor DPI awareness, so text stays sharp on scaled displays
