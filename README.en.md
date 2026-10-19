@@ -23,6 +23,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
   - [4.2 On read receipts](#42-on-read-receipts)
   - [4.3 Behaviour](#43-behaviour)
 - [5. License](#5-license)
+- [6. Changelog](#6-changelog)
 
 ---
 
