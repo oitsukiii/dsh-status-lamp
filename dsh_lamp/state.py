@@ -16,7 +16,11 @@ from .event_tail import current_phase, read_tail_events
 from .paths import projcache_dir, sessions_dir
 
 # 状态文件这么久没更新，就认为 DSH 没在跑。
-STALE_SECONDS = 20.0
+#
+# 实测 DSH 大约每 5~7 秒写一次 projcache，所以 20 秒只有 3 倍余量 ——
+# 一旦它进入「长时间空闲不写盘」的状态，就会被误判为离线 ✗
+# 放宽到 60 秒：真挂了最多晚 40 秒发现，但不会在正常空闲时误报。
+STALE_SECONDS = 60.0
 
 # 「完成」状态亮多久。None 表示永不超时（只被下一次 turn 打断）。
 DONE_WINDOW_MS: Optional[int] = 180_000
