@@ -35,6 +35,8 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 
 ## 1. Preview
 
+[**▶ 30-second demo**](docs/video/dsh-status-lamp-promo.mp4) (1.1 MB, silent)
+
 ![The four states](docs/images/overview-en.png)
 
 ### 1.1 What the lamp means
