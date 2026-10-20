@@ -35,8 +35,6 @@
 
 ## 1. 效果预览
 
-[**▶ 30 秒演示**](docs/video/dsh-status-lamp-promo.mp4)（1.1 MB，无声音）
-
 ![四种状态](docs/images/overview.png)
 
 ### 1.1 灯语
