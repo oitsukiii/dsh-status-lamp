@@ -76,13 +76,7 @@ No window switching, no log tailing. A glance out of the corner of your eye.
 | **Language / 语言** | Chinese or English; the interface changes as soon as you pick one |
 | **Plugin address** | The only required setting. `http://127.0.0.1:3099/events` when the lamp and DSH share a machine; the DSH host's LAN address otherwise |
 | **Test connect** | One request to the bridge's `/state`, purely to check the network |
-| **Installing the plugin and configuring it** | Two ways to install the bridge: copy a prompt for your agent, or copy the project address and do it by hand |
-
-**Where the bridge goes** (and the address is that same machine):
-
-The bridge is the `packages/dsh-lamp` DSH plugin: add
-`github:oitsukiii/dsh-status-lamp#path:/packages/dsh-lamp` in DSH's Plugins page
-and restart DSH. It starts and stops with DSH; there is no process to watch.
+| **Installing the plugin and configuring it** | See [3.2 Install the DSH bridge plugin](#32-install-the-dsh-bridge-plugin) |
 
 ---
 
