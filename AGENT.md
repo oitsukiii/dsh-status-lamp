@@ -67,3 +67,15 @@ python3 -c "import ast;ast.parse(open('client/lamp.py').read(), feature_version=
 
 **第二条是必须的** —— 嵌套 f-string（同引号）只有 Python 3.12+ 能解析，
 写的时候在自己机器上没事，到用户那里就是语法错误。
+
+## 图标
+
+`client/lamp.ico` 由 `tools/make_icon.py` 从 `packages/dsh-lamp/assets/plugin-icon.svg`
+生成 —— **插件清单里显示的图标和 exe 的图标是同一个矢量源**，改一边必须重跑另一边：
+
+```bash
+python3 tools/make_icon.py
+```
+
+脚本自己解析 SVG 的 rect/circle（本机没有 rsvg-convert / cairosvg，也不必要），
+先按 16 倍超采样再缩到 16/32/48/64/128/256 六档。
